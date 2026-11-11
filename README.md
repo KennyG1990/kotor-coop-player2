@@ -1,5 +1,11 @@
 # KotOR Co-op
 
+> **This is a modified fork** of [McChaffeeFAF/kotor-coop](https://github.com/McChaffeeFAF/kotor-coop)
+> (itself based on [reone](https://github.com/seedhartha/reone)), maintained by
+> [KennyG1990](https://github.com/KennyG1990) and licensed GPL-3.0 like both of them.
+> See [NOTICE.md](NOTICE.md) for what comes from where. The text below is upstream's and
+> its download links point at upstream's releases, not this fork's.
+
 Play Star Wars: Knights of the Old Republic's campaign online with friends. KotOR Co-op
 is a fan-made, open-source engine based on [reone](https://github.com/seedhartha/reone)
 (GPL-3.0). It plays the game from your own installed copy and adds host-authoritative

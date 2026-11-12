@@ -35,6 +35,7 @@
 #include "reone/game/object/module.h"
 #include "reone/game/object/store.h"
 #include "reone/game/party.h"
+#include "reone/game/partyseats.h"
 #include "reone/game/storesession.h"
 #include "reone/resource/dialog.h"
 #include "reone/resource/provider/dialogs.h"
@@ -714,6 +715,49 @@ CommandReject CoopSession::hostStoreCommand(HostClient &client, const Command &c
         }
     }
     return CommandReject::None;
+}
+
+namespace {
+
+/** Free Mode clients whose character has arrived, in the order they joined. */
+template <class Clients>
+std::vector<const typename Clients::mapped_type *> seatedClients(const Clients &clients, int seats) {
+    std::vector<const typename Clients::mapped_type *> result;
+    for (const auto &[connection, client] : clients) {
+        if (client.welcomed && client.guestReceived) {
+            result.push_back(&client);
+        }
+    }
+    // Client ids are handed out in join order; the map is keyed by connection.
+    std::sort(result.begin(), result.end(), [](const auto *left, const auto *right) {
+        return left->clientId < right->clientId;
+    });
+    if (static_cast<int>(result.size()) > seats) {
+        result.resize(std::max(0, seats));
+    }
+    return result;
+}
+
+} // namespace
+
+std::vector<std::shared_ptr<Creature>> CoopSession::partySeatGuests() const {
+    std::vector<std::shared_ptr<Creature>> result;
+    if (!isHost() || !freeMode() || _config.partySeats <= 0) {
+        return result;
+    }
+    for (const auto *client : seatedClients(_clients, _config.partySeats)) {
+        if (auto creature = client->guestId ? _game.getObjectById<Creature>(client->guestId) : nullptr) {
+            result.push_back(std::move(creature));
+        }
+    }
+    return result;
+}
+
+int CoopSession::partySeatsTaken() const {
+    if (!isHost() || !freeMode() || _config.partySeats <= 0) {
+        return 0;
+    }
+    return static_cast<int>(seatedClients(_clients, _config.partySeats).size());
 }
 
 std::vector<GuestRosterEntry> CoopSession::guestList() const {

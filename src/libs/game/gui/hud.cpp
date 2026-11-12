@@ -51,6 +51,7 @@
 #include "reone/game/object/camera.h"
 #include "reone/game/object/module.h"
 #include "reone/game/party.h"
+#include "reone/game/partyseats.h"
 
 using namespace reone::audio;
 
@@ -643,8 +644,44 @@ void HUD::updatePartyPresentation() {
     const std::array<Label *, 3> hinderedLabels {
         _controls.LBL_CMBTEFCTRED1.get(), _controls.LBL_CMBTEFCTRED2.get(), _controls.LBL_CMBTEFCTRED3.get()};
 
+    // Party seats (partyseats.h): a seated Free Mode guest is shown in a
+    // portrait no party member holds. It is not a party member: the portrait
+    // buttons still switch between the party's own members only.
+    std::array<std::shared_ptr<Creature>, kPartyPortraitCount> shown;
+    for (int i = 0; i < kPartyPortraitCount; ++i) {
+        shown[i] = party.getMember(i);
+    }
+    _seatedGuestNames.clear();
+    _seatedGuestIds.clear();
+    if (auto *coop = _game.coop(); coop && coop->isHost()) {
+        auto seated = coop->partySeatGuests();
+        if (!seated.empty()) {
+            std::vector<uint32_t> memberIds;
+            for (const auto &member : shown) {
+                memberIds.push_back(member ? member->id() : 0);
+            }
+            std::vector<uint32_t> seatIds;
+            for (const auto &guest : seated) {
+                seatIds.push_back(guest->id());
+            }
+            auto slots = partyPortraitSlots(memberIds, seatIds);
+            for (int i = 0; i < kPartyPortraitCount; ++i) {
+                if (!slots[i].seat) {
+                    continue;
+                }
+                for (const auto &guest : seated) {
+                    if (guest->id() == slots[i].creature) {
+                        shown[i] = guest;
+                        _seatedGuestNames.insert(guest->name().substr(0, 32));
+                        _seatedGuestIds.insert(guest->id());
+                    }
+                }
+            }
+        }
+    }
+
     for (int i = 0; i < 3; ++i) {
-        std::shared_ptr<Creature> member(party.getMember(i));
+        std::shared_ptr<Creature> member(shown[i]);
         // Portrait status (both layouts author these over each portrait):
         // down, cannot act, and whether good / bad effects are on.
         MemberStatus status = member ? memberStatus(_services.resource.twoDas, *member) : MemberStatus();
@@ -909,6 +946,9 @@ void HUD::renderGuestList() {
     _services.graphics.context.withBlendMode(graphics::BlendMode::Normal, [&]() {
         float y = top;
         for (const auto &guest : guests) {
+            if (_seatedGuestNames.count(guest.name) > 0) {
+                continue; // shown in a party portrait instead (partyseats.h)
+            }
             float share = guest.maxHp > 0 ? std::clamp(static_cast<float>(guest.hp) / guest.maxHp, 0.0f, 1.0f) : 0.0f;
             // Green when well, yellow when hurt, red when near death; grey while away.
             glm::vec3 color = !guest.present ? glm::vec3(0.6f) :

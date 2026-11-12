@@ -76,6 +76,7 @@ struct CoopConfig {
     int maxClients {2}; // Story Mode: the host plus two companions
     // Host options (co-op design notes)
     bool hostOnlyTransitions {false}; // only the host's exit moves the party
+    int partySeats {0};               // Free Mode host: guests shown as party members (partyseats.h); 0 off
     bool hostOnlyTrading {false};     // Story Mode: only the host may open stores
     bool hostOnlyScenes {true};       // only the host's character starts scripted conversations and cutscenes (both modes)
     bool noPause {false};             // "No pause in co-op"
@@ -133,6 +134,7 @@ struct CoopLaunch {
     std::filesystem::path k2Path; // empty unless --k2game
     std::filesystem::path executablePath;
     bool hostOnlyTransitions {false};
+    int partySeats {0}; // --coop-party-seats
     bool hostOnlyTrading {false};
     bool hostOnlyScenes {true};
     bool noPause {false};
@@ -415,6 +417,15 @@ public:
     void onContainerOpened(const Object &container);
     /** The guests the HUD lists (Free Mode): the host sees all, a guest the others. */
     std::vector<net::GuestRosterEntry> guestList() const;
+    /**
+     * Host, Free Mode: the guest characters that hold a party seat (the
+     * partySeats option, partyseats.h), in the order their players joined.
+     * Only characters standing in the world now; one away for a scene keeps
+     * its seat but is not in this list.
+     */
+    std::vector<std::shared_ptr<Creature>> partySeatGuests() const;
+    /** Host, Free Mode: party seats taken by a connected guest, present or away. */
+    int partySeatsTaken() const;
     /** Client: answer the store or minigame prompt the host offered. */
     bool clientAnswerOffer(bool yes);
     /** Client: its own Pazaak game (a prompt's) ended; the credits won or lost go to the host. */

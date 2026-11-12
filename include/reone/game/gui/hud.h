@@ -17,6 +17,9 @@
 
 #pragma once
 
+#include <set>
+#include <string>
+
 #include "reone/gui/control/button.h"
 #include "reone/gui/control/label.h"
 #include "reone/gui/control/progressbar.h"
@@ -373,6 +376,9 @@ private:
     void renderCoopChat();
     float chatOverlayBottom() const;
     std::shared_ptr<graphics::Font> _guestListFont;
+    // Guests shown in a party portrait this frame, so the list skips them (partyseats.h).
+    std::set<std::string> _seatedGuestNames;
+    std::set<uint32_t> _seatedGuestIds;
     // Co-op name tags and guest-character portraits (hudcoop.cpp).
     struct CoopPortrait {
         std::shared_ptr<Creature> creature;

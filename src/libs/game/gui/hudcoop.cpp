@@ -133,6 +133,9 @@ void HUD::renderCoopNameTags() {
     for (const auto &presence : presences) {
         if (presence.outsideParty && !presence.own) {
             if (auto creature = std::dynamic_pointer_cast<Creature>(presence.object)) {
+                if (_seatedGuestIds.count(creature->id()) > 0) {
+                    continue; // in a party portrait already (partyseats.h); its name tag stays
+                }
                 sources.push_back({std::move(creature), presence.name, presence.colour});
             }
         }
@@ -154,7 +157,10 @@ void HUD::renderCoopPortraits(const std::vector<PortraitSource> &sources, float 
         // The Free Mode guest list is drawn first.
         auto *coop = _game.coop();
         if (coop && coop->freeMode()) {
-            top += static_cast<float>(coop->guestList().size()) * font.height() * scale * 1.15f;
+            // Less the guests a party portrait shows: the list skips their lines.
+            size_t listed = coop->guestList().size();
+            listed -= std::min(listed, _seatedGuestNames.size());
+            top += static_cast<float>(listed) * font.height() * scale * 1.15f;
         }
     }
     float x = right - size;

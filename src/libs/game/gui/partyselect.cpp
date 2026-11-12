@@ -17,11 +17,14 @@
 
 #include "reone/game/gui/partyselect.h"
 
+#include <algorithm>
 #include <utility>
 
 #include "reone/game/di/services.h"
 #include "reone/game/game.h"
+#include "reone/game/coopsession.h"
 #include "reone/game/party.h"
+#include "reone/game/partyseats.h"
 #include "reone/game/portrait.h"
 #include "reone/game/portraits.h"
 #include "reone/game/script/runner.h"
@@ -167,6 +170,12 @@ void PartySelection::prepare(const PartySelectionContext &ctx) {
 
     _context = ctx;
     _availableCount = kMaxFollowerCount;
+    if (auto *coop = _game.coop(); coop && coop->isHost()) {
+        // A seated guest holds one of the companion places (partyseats.h);
+        // companions the story forces into the party come first.
+        int forced = (ctx.forceNpc1 >= 0 ? 1 : 0) + (ctx.forceNpc2 >= 0 && ctx.forceNpc2 != ctx.forceNpc1 ? 1 : 0);
+        _availableCount = partySelectionPlaces(kMaxFollowerCount, coop->partySeatsTaken(), forced);
+    }
     _selectedNpc = -1;
 
     for (int i = 0; i < kMaxNpcCount; ++i) {
@@ -437,7 +446,9 @@ void PartySelection::onAcceptButtonClick() {
 void PartySelection::refreshAvailableCount() {
     // K2's layout has no Available Slots label of its own: the count reads
     // "Available Slots <n>". K1's label sits beside a bare number.
-    std::string count = std::to_string(_availableCount);
+    // A party already over the limit (a guest took a seat after both
+    // companions were picked) reads as no places left, not a negative number.
+    std::string count = std::to_string(std::max(0, _availableCount));
     if (isTSL() && !_controls.LBL_AVAILABLE) {
         std::string label = _services.resource.strings.getText(kStrRefAvailableSlots);
         if (!label.empty()) {

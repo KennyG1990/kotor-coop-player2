@@ -31,6 +31,7 @@
 #include "reone/game/object/module.h"
 #include "reone/game/object/placeable.h"
 #include "reone/game/party.h"
+#include "reone/game/partyseats.h"
 #include "reone/game/reputes.h"
 #include "reone/game/script/runner.h"
 #include "reone/game/visualeffects.h"
@@ -3604,6 +3605,35 @@ json::object CoopSession::statusJson() const {
         root["enemyScale"] = std::move(scale);
         json::object options;
         options["hostOnlyTransitions"] = _config.hostOnlyTransitions;
+        options["partySeats"] = _config.partySeats;
+        // Party seats (partyseats.h): how many are taken, and the characters
+        // standing in the world that the HUD may show in a party portrait.
+        json::object seats;
+        seats["taken"] = partySeatsTaken();
+        json::array seated;
+        for (const auto &guest : partySeatGuests()) {
+            seated.push_back(json::value(guest->id()));
+        }
+        seats["present"] = std::move(seated);
+        // What each of the HUD's party portraits shows, by the same rule the HUD uses.
+        std::vector<uint32_t> memberIds;
+        for (int i = 0; i < kPartyPortraitCount; ++i) {
+            auto member = _game.party().getMember(i);
+            memberIds.push_back(member ? member->id() : 0);
+        }
+        std::vector<uint32_t> seatIds;
+        for (const auto &guest : partySeatGuests()) {
+            seatIds.push_back(guest->id());
+        }
+        json::array portraits;
+        for (const auto &slot : partyPortraitSlots(memberIds, seatIds)) {
+            json::object entry;
+            entry["id"] = slot.creature;
+            entry["seat"] = slot.seat;
+            portraits.push_back(std::move(entry));
+        }
+        seats["portraits"] = std::move(portraits);
+        root["partySeats"] = std::move(seats);
         options["hostOnlyTrading"] = _config.hostOnlyTrading;
         options["hostOnlyScenes"] = _config.hostOnlyScenes;
         options["noPause"] = _config.noPause;

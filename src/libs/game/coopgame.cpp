@@ -29,6 +29,7 @@
 #include "reone/game/object/item.h"
 #include "reone/game/object/module.h"
 #include "reone/game/party.h"
+#include "reone/game/partyseats.h"
 #include "reone/game/script/runner.h"
 #include "reone/net/bytes.h"
 #include "reone/net/fingerprint.h"
@@ -963,6 +964,8 @@ std::shared_ptr<CoopSession> startCoopSession(Game &game, const CoopLaunch &laun
     config.playerName = launch.playerName.empty() ? std::string(launch.role == CoopRole::Host ? "Host" : "Player") : launch.playerName;
     config.preferredTag = launch.preferredTag;
     config.hostOnlyTransitions = launch.hostOnlyTransitions;
+    // Party seats are a Free Mode host's: a Story Mode guest already plays a party member.
+    config.partySeats = launch.mode == "free" && launch.role == CoopRole::Host ? clampPartySeats(launch.partySeats) : 0;
     config.hostOnlyTrading = launch.hostOnlyTrading;
     config.hostOnlyScenes = launch.hostOnlyScenes;
     config.noPause = launch.noPause;

@@ -39,7 +39,29 @@ up to 8 guests.
 Host options: `--coop-host-only-transitions` (no area-exit ready check: only the host's
 exit moves the party), `--coop-host-only-trading` (only the host opens Story Mode stores),
 `--coop-no-pause`, `--coop-pause-cooldown <s>`, `--coop-enemy-scaling <f>` (enemy hit
-points and damage per extra player), `--coop-ask-join 0|1`, `--coop-password <text>`.
+points and damage per extra player), `--coop-ask-join 0|1`, `--coop-password <text>`,
+`--coop-party-seats <0-2>` (below).
+
+### Party seats (this fork)
+
+A Free Mode guest's own character stays outside the party table, so scripts that count
+or check the party see the host's party alone. On the host's screen that leaves the
+guest as a line under the minimap and a small portrait beside it. `--coop-party-seats <n>`
+(0, the default, changes nothing) lets the first `n` guests to join hold a party seat
+instead:
+
+- the guest takes the next free party portrait on the HUD, with its health and Force
+  bars, status marks and level-up marker; the line and the small portrait are dropped
+  for it, and its name tag stays;
+- the party selection screen offers one companion place fewer per seat taken;
+- the story always wins a place: companions it forces into the party are counted
+  first, and when the party is full the seated guest is listed under the minimap again
+  until a portrait frees.
+
+The guest is still a puppet outside the party table, nothing is sent to clients and the
+protocol is unchanged. The rules that need no engine are in `game/partyseats.h`
+(`test/game/partyseats.cpp`); the host's `netstatus` reports `partySeats` (seats taken,
+the seated characters present, and what each portrait shows).
 
 ## Joining by IP:port
 

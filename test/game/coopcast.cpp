@@ -538,6 +538,103 @@ TEST_F(AutoLevel, level_up_options_are_one_line_of_json_with_a_choice_the_decode
     EXPECT_EQ(options.recommended, back);
 }
 
+// Self-directed creation (fork addition): a new character's skills and first feat, by the creation screens' rules.
+
+TEST_F(AutoLevel, creation_options_are_the_creation_screens_numbers) {
+    auto soldier = classes->get(ClassType::Soldier);
+    ASSERT_TRUE(soldier);
+    FakeFeats feats;
+    feats.selectable = {static_cast<FeatType>(0), static_cast<FeatType>(2), static_cast<FeatType>(5)};
+    feats.requires[static_cast<FeatType>(0)] = static_cast<FeatType>(2);
+    const CreatureAttributes &start = soldier->defaultAttributes();
+
+    auto options = coopCreationOptions(feats, *soldier, start);
+    EXPECT_EQ(static_cast<int>(ClassType::Soldier), options.clazz);
+    EXPECT_EQ(1, options.level);
+    EXPECT_FALSE(options.abilityDue);
+    EXPECT_EQ(4, options.skillPoints) << "four times a level's (2 + 0) / 2";
+    ASSERT_EQ(8u, options.skills.size());
+    for (const auto &skill : options.skills) {
+        bool classSkill = soldier->isClassSkill(static_cast<SkillType>(skill.id));
+        EXPECT_EQ(0, skill.rank);
+        EXPECT_EQ(classSkill ? 1 : 2, skill.cost) << skill.id;
+        EXPECT_EQ(classSkill ? 4 : 2, skill.cap) << skill.id << ": a first-level character's caps";
+    }
+    EXPECT_EQ(1, options.featChoices) << "the class's first-level gain";
+    std::vector<int> candidates;
+    for (const auto &pick : options.feats) {
+        candidates.push_back(pick.id);
+    }
+    EXPECT_THAT(candidates, UnorderedElementsAre(2, 5));
+    EXPECT_EQ(0, options.powerChoices);
+
+    // Recommended is what the screens' Recommended buttons choose: the first recommended skill to its cap, the first recommended feat.
+    EXPECT_EQ(-1, options.recommended.ability);
+    EXPECT_EQ(4, options.recommended.skills[static_cast<int>(SkillType::Demolitions)]);
+    EXPECT_EQ(1u, options.recommended.skills.size());
+    ASSERT_EQ(1u, options.recommended.feats.size());
+    EXPECT_EQ(2, options.recommended.feats[0]);
+    EXPECT_NE(std::string::npos, coopLevelUpOptionsJson(options).find("\"level\":1"));
+
+    // And the recommended choice is one the rules accept.
+    CreatureAttributes made(start);
+    EXPECT_EQ("", applyCoopCreationChoice(feats, *soldier, options.recommended, made));
+    EXPECT_EQ(4, made.getSkillRank(SkillType::Demolitions));
+}
+
+TEST_F(AutoLevel, a_creation_choice_is_applied_only_within_the_creation_rules) {
+    auto soldier = classes->get(ClassType::Soldier);
+    ASSERT_TRUE(soldier);
+    FakeFeats feats;
+    feats.selectable = {static_cast<FeatType>(0), static_cast<FeatType>(2), static_cast<FeatType>(5)};
+    feats.requires[static_cast<FeatType>(0)] = static_cast<FeatType>(2);
+    const CreatureAttributes &start = soldier->defaultAttributes();
+
+    CoopLevelUpChoice choice;
+    choice.clazz = static_cast<int>(ClassType::Soldier);
+    choice.skills = {{static_cast<int>(SkillType::Awareness), 2}, {static_cast<int>(SkillType::ComputerUse), 1}}; // 2 + 2 points
+    choice.feats = {5};
+    CreatureAttributes made(start);
+    EXPECT_EQ("", applyCoopCreationChoice(feats, *soldier, choice, made));
+    EXPECT_EQ(2, made.getSkillRank(SkillType::Awareness));
+    EXPECT_EQ(1, made.getSkillRank(SkillType::ComputerUse));
+    EXPECT_TRUE(made.hasFeat(static_cast<FeatType>(5)));
+    EXPECT_EQ(1, made.getAggregateLevel()) << "still a first-level character";
+    EXPECT_EQ(start.getAbilityScore(Ability::Strength), made.getAbilityScore(Ability::Strength));
+
+    auto refused = [&](CoopLevelUpChoice bad, const CreatureAttributes &from) {
+        CreatureAttributes attributes(from);
+        auto why = applyCoopCreationChoice(feats, *soldier, bad, attributes);
+        EXPECT_EQ(from.getSkillRank(SkillType::Awareness), attributes.getSkillRank(SkillType::Awareness)) << "a refusal changes nothing";
+        EXPECT_EQ(from.feats(), attributes.feats()) << "a refusal changes nothing";
+        return why;
+    };
+    auto with = [&](auto change) {
+        CoopLevelUpChoice bad(choice);
+        change(bad);
+        return bad;
+    };
+    EXPECT_NE("", refused(with([](auto &c) { c.skills[static_cast<int>(SkillType::Demolitions)] = 1; }), start)) << "five points of four";
+    EXPECT_NE("", refused(with([](auto &c) { c.feats = {0}; }), start)) << "a feat that needs another first";
+    EXPECT_NE("", refused(with([](auto &c) { c.feats = {2, 5}; }), start)) << "two feats where one is chosen";
+    EXPECT_NE("", refused(with([](auto &c) { c.feats = {1}; }), start)) << "a feat the class already gave";
+    EXPECT_NE("", refused(with([](auto &c) { c.ability = 0; }), start)) << "no ability point at creation";
+    EXPECT_NE("", refused(with([](auto &c) { c.powers = {1}; }), start)) << "no power at creation";
+    EXPECT_NE("", refused(with([](auto &c) { c.clazz = static_cast<int>(ClassType::JediConsular); }), start)) << "another class";
+    EXPECT_NE("", refused(with([](auto &c) { c.skills = {{99, 1}}; }), start)) << "not a skill";
+    // With points to spare, a cap still holds: a bright soldier may not pass rank 2 in a cross-class skill.
+    CreatureAttributes bright(start);
+    bright.setAbilityScore(Ability::Intelligence, 18);
+    EXPECT_EQ(12, coopCreationOptions(feats, *soldier, bright).skillPoints);
+    EXPECT_NE("", refused(with([](auto &c) { c.skills = {{static_cast<int>(SkillType::ComputerUse), 3}}; }), bright));
+    EXPECT_NE("", refused(with([](auto &c) { c.skills = {{static_cast<int>(SkillType::Awareness), 5}}; }), bright));
+    CoopLevelUpChoice wide(choice);
+    wide.skills = {{static_cast<int>(SkillType::Awareness), 4}, {static_cast<int>(SkillType::ComputerUse), 2}};
+    CreatureAttributes widened(bright);
+    EXPECT_EQ("", applyCoopCreationChoice(feats, *soldier, wide, widened));
+    EXPECT_EQ(4, widened.getSkillRank(SkillType::Awareness));
+}
+
 // Self-knowledge (fork addition): what a character is and can do, in the game's own names.
 
 TEST_F(AutoLevel, own_sheet_names_what_the_character_holds_and_only_that) {

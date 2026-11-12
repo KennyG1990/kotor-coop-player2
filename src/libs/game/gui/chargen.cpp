@@ -528,12 +528,20 @@ void CharacterGeneration::finish() {
     }
 }
 
-void CharacterGeneration::finishQuickForAutomation(int classSlot, std::string name) {
+const Character *CharacterGeneration::quickCharacterForAutomation(int classSlot) const {
+    return _classSelection ? _classSelection->classButtonCharacter(classSlot) : nullptr;
+}
+
+void CharacterGeneration::finishQuickForAutomation(int classSlot, std::string name, const CreatureAttributes *attributes) {
     const Character *slot = _classSelection ? _classSelection->classButtonCharacter(classSlot) : nullptr;
     if (!slot) {
         throw std::out_of_range("Class slot is out of range: " + std::to_string(classSlot));
     }
-    setCharacter(*slot);
+    Character character(*slot);
+    if (attributes) {
+        character.attributes = *attributes;
+    }
+    setCharacter(std::move(character));
     // A new appearance rolls a random name, as on entering the name screen;
     // an explicit name replaces it.
     if (!name.empty()) {

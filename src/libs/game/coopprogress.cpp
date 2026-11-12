@@ -21,6 +21,7 @@
 #include "reone/game/d20/forms.h"
 #include "reone/game/d20/k2feats.h"
 #include "reone/game/d20/prestige.h"
+#include "reone/game/d20/skills.h"
 #include "reone/game/d20/spells.h"
 #include "reone/game/game.h"
 #include "reone/game/object/creature.h"
@@ -475,6 +476,100 @@ std::string coopLevelUpOptionsJson(const CoopLevelUpOptions &options) {
     root["powers"] = std::move(powers);
     root["recommended"] = encodeCoopLevelUp(options.recommended);
     return json::serialize(root);
+}
+
+CoopLevelUpOptions coopCreationOptions(const IFeats &feats, const CreatureClass &clazz, const CreatureAttributes &attributes) {
+    CoopLevelUpOptions options;
+    options.clazz = static_cast<int>(clazz.type());
+    options.className = clazz.name();
+    options.level = 1;
+    options.abilityDue = false;
+    for (int i = 0; i < 6; ++i) {
+        options.abilities[i] = attributes.getAbilityScore(static_cast<Ability>(i));
+    }
+    // The creation skills screen: four times a level's points, caps of a first-level character.
+    options.skillPoints = std::max(1, (clazz.skillPointBase() + attributes.getAbilityModifier(Ability::Intelligence)) / 2) * 4;
+    for (int i = 0; i <= static_cast<int>(SkillType::TreatInjury); ++i) {
+        auto type = static_cast<SkillType>(i);
+        CoopLevelUpOptions::Skill skill;
+        skill.id = i;
+        skill.rank = 0;
+        skill.classSkill = isClassSkill(clazz, attributes, type);
+        skill.cost = skill.classSkill ? 1 : 2;
+        skill.cap = skill.classSkill ? 4 : 2;
+        options.skills.push_back(skill);
+    }
+    // The creation feats screen: the class's first-level gain.
+    options.featChoices = std::max(0, clazz.getFeatGain(attributes.getClassLevel(clazz.type())));
+    for (auto type : feats.getLevelUpCandidates(attributes, clazz)) {
+        CoopLevelUpOptions::Pick pick;
+        pick.id = static_cast<int>(type);
+        if (auto feat = feats.get(type)) {
+            pick.name = feat->name;
+            pick.description = feat->description;
+        }
+        options.feats.push_back(std::move(pick));
+    }
+    options.powerChoices = 0;
+    // What the screens' Recommended buttons would choose.
+    options.recommended.clazz = options.clazz;
+    std::map<SkillType, int> ranks;
+    allocateRecommendedSkills(
+        clazz.recommendedSkills(), ranks, options.skillPoints,
+        [&](SkillType skill) { return isClassSkill(clazz, attributes, skill) ? 1 : 2; },
+        [&](SkillType skill) { return isClassSkill(clazz, attributes, skill) ? 4 : 2; });
+    for (const auto &[skill, rank] : ranks) {
+        if (rank > 0) {
+            options.recommended.skills[static_cast<int>(skill)] = rank;
+        }
+    }
+    if (options.featChoices > 0) {
+        for (auto feat : pickRecommendedFeats(feats, attributes, clazz, options.featChoices)) {
+            options.recommended.feats.push_back(static_cast<int>(feat));
+        }
+    }
+    return options;
+}
+
+std::string applyCoopCreationChoice(const IFeats &feats, const CreatureClass &clazz, const CoopLevelUpChoice &choice,
+                                    CreatureAttributes &attributes) {
+    if (choice.clazz != static_cast<int>(clazz.type())) {
+        return "the choice is for another class";
+    }
+    if (choice.ability != -1 || !choice.powers.empty()) {
+        return "a new character has no ability point or power to choose";
+    }
+    CreatureAttributes result(attributes);
+    int points = std::max(1, (clazz.skillPointBase() + result.getAbilityModifier(Ability::Intelligence)) / 2) * 4;
+    for (const auto &[skill, ranks] : choice.skills) {
+        if (skill < 0 || skill > static_cast<int>(SkillType::TreatInjury) || ranks < 0) {
+            return "that is not a skill";
+        }
+        auto type = static_cast<SkillType>(skill);
+        bool classSkill = isClassSkill(clazz, result, type);
+        int cost = (classSkill ? 1 : 2) * ranks;
+        if (cost > points) {
+            return "more skill points than a new character has";
+        }
+        if (ranks > (classSkill ? 4 : 2)) {
+            return "a skill above what a new character may have";
+        }
+        points -= cost;
+        result.setSkillRank(type, ranks);
+    }
+    int featChoices = std::max(0, clazz.getFeatGain(result.getClassLevel(clazz.type())));
+    if (static_cast<int>(choice.feats.size()) > featChoices) {
+        return "more feats than a new character chooses";
+    }
+    for (int feat : choice.feats) {
+        auto type = static_cast<FeatType>(feat);
+        if (result.hasFeat(type) || !feats.isLevelUpCandidate(type, result, clazz)) {
+            return "a feat a new character of this class cannot take";
+        }
+        result.addFeat(type);
+    }
+    attributes = result;
+    return std::string();
 }
 
 std::string coopOwnSheetJson(const IFeats &feats, const ISpells &spells, const CreatureAttributes &attributes,

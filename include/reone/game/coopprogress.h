@@ -107,6 +107,23 @@ std::string coopCutText(const std::string &text, size_t limit);
 std::string coopLevelUpOptionsJson(const CoopLevelUpOptions &options);
 
 /**
+ * What a new character may choose at creation (fork addition), in the shape of the
+ * level-up options: four levels' worth of skill points, the first level's rank caps and
+ * the class's first-level feats, as the custom creation screens allow. attributes are
+ * the class's own at level 1 (its abilities and granted feats). The recommended choice
+ * is the one the creation screens' Recommended buttons make.
+ */
+CoopLevelUpOptions coopCreationOptions(const IFeats &feats, const CreatureClass &clazz, const CreatureAttributes &attributes);
+
+/**
+ * Apply a creation choice to the class's level-1 attributes by those same rules.
+ * Returns why it is refused, or an empty string once attributes hold the choice.
+ * Nothing is changed when it is refused.
+ */
+std::string applyCoopCreationChoice(const IFeats &feats, const CreatureClass &clazz, const CoopLevelUpChoice &choice,
+                                    CreatureAttributes &attributes);
+
+/**
  * What a character is and can do, in the game's own names (fork addition), as one
  * line of JSON: classes and levels, abilities, skills, the feats and powers it holds,
  * vitality and alignment. For a guest seat driven from outside, which must act by its

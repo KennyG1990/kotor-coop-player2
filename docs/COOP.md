@@ -71,6 +71,14 @@ unless it is called; a person in a seat is unaffected, and none changes the prot
 
 Guest (client) console:
 
+- `coopguestoptions [class slot]`: what a new guest character of that class may choose,
+  in the shape of `cooplevelupoptions`: four levels' worth of skill points, a first-level
+  character's rank caps, the class's first-level feat, and the set the creation screens'
+  Recommended buttons make.
+- `coopnewguest <class slot> <name> <choice>`: quick creation with a chosen set, written
+  as `cooplevelupchoose` takes it. The choice is held to the creation screens' rules
+  (`applyCoopCreationChoice`) or refused with the reason. Without the third argument the
+  command is what it was: the class's own character, with no skill ranks.
 - `cooplevelupoptions`: what the controlled character may choose at its next level, as
   JSON (points, costs, caps, legal feats and powers, the Recommended set).
 - `cooplevelupchoose <choice>`: send a chosen set. `validateCoopLevelUp` on the host is

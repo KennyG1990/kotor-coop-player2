@@ -97,7 +97,15 @@ public:
      * default portrait. An empty name keeps the randomly generated one. For
      * scripted headless runs.
      */
-    void finishQuickForAutomation(int classSlot, std::string name);
+    void finishQuickForAutomation(int classSlot, std::string name, const CreatureAttributes *attributes = nullptr);
+
+    /**
+     * The character a class slot (0-5) would start with, or null (fork addition).
+     * finishQuickForAutomation takes attributes built from it in place of the
+     * class's own: a character whose skills and first feat were chosen outside
+     * the screens, by the screens' rules (coopprogress.h, applyCoopCreationChoice).
+     */
+    const Character *quickCharacterForAutomation(int classSlot) const;
 
     void openClassSelection();
     void openNameEntry();

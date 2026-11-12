@@ -956,7 +956,33 @@ void Game::initCoopConsole() {
         _console.printLine("coop minigame quit");
     });
     // Free Mode
-    _console.registerCommand("coopnewguest", "co-op Free Mode client: make the guest character with quick character generation: coopnewguest [class slot 0-5] [name]", [=](const ConsoleArgs &args) {
+    // Self-directed creation (fork addition): what a new guest character of a class may choose.
+    // The same shape as cooplevelupoptions; coopnewguest takes a choice made from it.
+    _console.registerCommand("coopguestoptions", "co-op Free Mode client: what a new guest character of a class slot may choose, as one line of JSON: coopguestoptions [class slot 0-5]", [=](const ConsoleArgs &args) {
+        clientSession();
+        int slot = args.size() > 1 ? args.get<int>(1).value_or(2) : 2;
+        if (!_charGen) {
+            _charGen = tryLoadGUI<CharacterGeneration>();
+        }
+        if (!_charGen) {
+            throw std::runtime_error("Character generation GUI is unavailable");
+        }
+        auto character = _charGen->quickCharacterForAutomation(slot);
+        if (!character) {
+            throw std::runtime_error("no class slot " + std::to_string(slot));
+        }
+        std::shared_ptr<CreatureClass> clazz;
+        try {
+            clazz = _services.game.classes.get(character->attributes.getEffectiveClass());
+        } catch (const std::exception &) {
+            clazz.reset();
+        }
+        if (!clazz) {
+            throw std::runtime_error("the character's class did not load");
+        }
+        _console.printLine(coopLevelUpOptionsJson(coopCreationOptions(_services.game.feats, *clazz, character->attributes)));
+    });
+    _console.registerCommand("coopnewguest", "co-op Free Mode client: make the guest character with quick character generation: coopnewguest [class slot 0-5] [name] [choice, as cooplevelupchoose takes it]", [=](const ConsoleArgs &args) {
         auto &session = clientSession();
         if (!session.clientNeedsGuest()) {
             throw std::runtime_error("no guest character is needed");
@@ -969,7 +995,34 @@ void Game::initCoopConsole() {
         if (!_charGen) {
             throw std::runtime_error("Character generation GUI is unavailable");
         }
-        _charGen->finishQuickForAutomation(slot, name);
+        if (args.size() > 3) {
+            // A chosen set of skills and first feat, held to the creation screens' rules (fork addition).
+            CoopLevelUpChoice choice;
+            if (!decodeCoopLevelUp(std::string(*args[3]), choice)) {
+                throw std::runtime_error("that is not a creation choice");
+            }
+            auto character = _charGen->quickCharacterForAutomation(slot);
+            if (!character) {
+                throw std::runtime_error("no class slot " + std::to_string(slot));
+            }
+            std::shared_ptr<CreatureClass> clazz;
+            try {
+                clazz = _services.game.classes.get(character->attributes.getEffectiveClass());
+            } catch (const std::exception &) {
+                clazz.reset();
+            }
+            if (!clazz) {
+                throw std::runtime_error("the character's class did not load");
+            }
+            CreatureAttributes attributes(character->attributes);
+            auto why = applyCoopCreationChoice(_services.game.feats, *clazz, choice, attributes);
+            if (!why.empty()) {
+                throw std::runtime_error(why);
+            }
+            _charGen->finishQuickForAutomation(slot, name, &attributes);
+        } else {
+            _charGen->finishQuickForAutomation(slot, name);
+        }
         _console.printLine("coop guest " + session.guestPath().string());
     });
     auto storeItem = [this](bool buying, const std::string &which) -> std::shared_ptr<Item> {

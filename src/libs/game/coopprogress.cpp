@@ -6,6 +6,8 @@
 
 #include "reone/game/coopprogress.h"
 
+#include <boost/json.hpp>
+
 #include <algorithm>
 #include <set>
 
@@ -15,6 +17,7 @@
 #include "reone/game/d20/class.h"
 #include "reone/game/d20/classes.h"
 #include "reone/game/d20/feats.h"
+#include "reone/game/autolevel.h"
 #include "reone/game/d20/forms.h"
 #include "reone/game/d20/k2feats.h"
 #include "reone/game/d20/prestige.h"
@@ -341,6 +344,137 @@ void applyCoopLevelUp(Game &game, Creature &companion, const CreatureAttributes 
     companion.attributes() = attributes;
     companion.setMaxHitPoints(companion.hitPoints() + clazz->hitdie());
     companion.addBaseForcePoints(clazz->forcePointsPerLevel());
+}
+
+CoopLevelUpOptions coopLevelUpOptions(const IFeats &feats, const ISpells &spells, const CreatureClass &clazz,
+                                      const CreatureAttributes &attributes, bool darkSide) {
+    CoopLevelUpOptions options;
+    options.clazz = static_cast<int>(clazz.type());
+    options.className = clazz.name();
+    int newLevel = attributes.getAggregateLevel() + 1;
+    options.level = newLevel;
+    options.abilityDue = newLevel % 4 == 0;
+    for (int i = 0; i < 6; ++i) {
+        options.abilities[i] = attributes.getAbilityScore(static_cast<Ability>(i));
+    }
+    // The same sums validateCoopLevelUp makes.
+    options.skillPoints = std::max(1, (clazz.skillPointBase() + attributes.getAbilityModifier(Ability::Intelligence)) / 2);
+    for (int i = 0; i <= static_cast<int>(SkillType::TreatInjury); ++i) {
+        auto type = static_cast<SkillType>(i);
+        CoopLevelUpOptions::Skill skill;
+        skill.id = i;
+        skill.rank = attributes.getSkillRank(type);
+        skill.classSkill = isClassSkill(clazz, attributes, type);
+        skill.cost = skill.classSkill ? 1 : 2;
+        skill.cap = skill.classSkill ? newLevel + 3 : (newLevel + 3) / 2;
+        options.skills.push_back(skill);
+    }
+    options.featChoices = std::max(0, feats.getLevelUpChoiceCount(attributes, clazz));
+    for (auto type : feats.getLevelUpCandidates(attributes, clazz)) {
+        CoopLevelUpOptions::Pick pick;
+        pick.id = static_cast<int>(type);
+        if (auto feat = feats.get(type)) {
+            pick.name = feat->name;
+            pick.description = feat->description;
+        }
+        options.feats.push_back(std::move(pick));
+    }
+    options.powerChoices = std::max(0, clazz.getPowerGain(attributes.getClassLevel(clazz.type()) + 1));
+    if (options.powerChoices > 0) {
+        for (auto type : spells.getLevelUpCandidates(attributes, clazz, {})) {
+            CoopLevelUpOptions::Pick pick;
+            pick.id = static_cast<int>(type);
+            if (auto spell = spells.get(type)) {
+                pick.name = spell->name;
+                pick.description = spell->description;
+            }
+            options.powers.push_back(std::move(pick));
+        }
+    }
+    auto picks = autoLevelPicks(feats, spells, clazz, attributes, darkSide);
+    options.recommended.clazz = options.clazz;
+    options.recommended.ability = picks.ability;
+    for (const auto &[skill, ranks] : picks.skills) {
+        options.recommended.skills[static_cast<int>(skill)] = ranks;
+    }
+    for (auto feat : picks.feats) {
+        options.recommended.feats.push_back(static_cast<int>(feat));
+    }
+    for (auto power : picks.powers) {
+        options.recommended.powers.push_back(static_cast<int>(power));
+    }
+    return options;
+}
+
+std::string coopCutText(const std::string &text, size_t limit) {
+    if (text.size() <= limit) {
+        return text;
+    }
+    size_t end = limit;
+    while (end > 0 && (static_cast<unsigned char>(text[end]) & 0xC0) == 0x80) {
+        --end; // never end inside a character
+    }
+    return text.substr(0, end);
+}
+
+std::string coopLevelUpOptionsJson(const CoopLevelUpOptions &options) {
+    namespace json = boost::json;
+    static const char *kAbilityNames[] = {"strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"};
+    static const char *kSkillNames[] = {"computeruse", "demolitions", "stealth", "awareness",
+                                        "persuade", "repair", "security", "treatinjury"};
+    auto cut = [](const std::string &text) { return coopCutText(text, 300); };
+    auto picks = [&cut](const std::vector<CoopLevelUpOptions::Pick> &list) {
+        json::array out;
+        for (const auto &pick : list) {
+            json::object entry;
+            entry["id"] = pick.id;
+            entry["name"] = pick.name;
+            entry["description"] = cut(pick.description);
+            out.push_back(std::move(entry));
+        }
+        return out;
+    };
+    json::object root;
+    root["class"] = options.clazz;
+    root["className"] = options.className;
+    root["level"] = options.level;
+    json::object ability;
+    ability["due"] = options.abilityDue;
+    json::array scores;
+    for (int i = 0; i < 6; ++i) {
+        json::object entry;
+        entry["id"] = i;
+        entry["name"] = kAbilityNames[i];
+        entry["score"] = options.abilities[i];
+        scores.push_back(std::move(entry));
+    }
+    ability["scores"] = std::move(scores);
+    root["ability"] = std::move(ability);
+    json::object skills;
+    skills["points"] = options.skillPoints;
+    json::array skillList;
+    for (const auto &skill : options.skills) {
+        json::object entry;
+        entry["id"] = skill.id;
+        entry["name"] = skill.id >= 0 && skill.id < 8 ? kSkillNames[skill.id] : "";
+        entry["rank"] = skill.rank;
+        entry["cost"] = skill.cost;
+        entry["cap"] = skill.cap;
+        entry["classSkill"] = skill.classSkill;
+        skillList.push_back(std::move(entry));
+    }
+    skills["list"] = std::move(skillList);
+    root["skills"] = std::move(skills);
+    json::object feats;
+    feats["choices"] = options.featChoices;
+    feats["candidates"] = picks(options.feats);
+    root["feats"] = std::move(feats);
+    json::object powers;
+    powers["choices"] = options.powerChoices;
+    powers["candidates"] = picks(options.powers);
+    root["powers"] = std::move(powers);
+    root["recommended"] = encodeCoopLevelUp(options.recommended);
+    return json::serialize(root);
 }
 
 CharacterSheet coopCharacterSheet(const Creature &creature, bool levelUpAllowed) {

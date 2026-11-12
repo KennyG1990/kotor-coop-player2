@@ -10,6 +10,7 @@
 
 #include "reone/game/autolevel.h"
 #include "reone/game/coopcast.h"
+#include "reone/game/coopprogress.h"
 #include "reone/game/coopstandin.h"
 #include "reone/game/d20/class.h"
 #include "reone/game/d20/classes.h"
@@ -308,7 +309,15 @@ public:
         auto it = requires.find(type);
         return it == requires.end() || attributes.hasFeat(it->second);
     }
-    std::vector<FeatType> getLevelUpCandidates(const CreatureAttributes &, const CreatureClass &) const override { return {}; }
+    std::vector<FeatType> getLevelUpCandidates(const CreatureAttributes &attributes, const CreatureClass &clazz) const override {
+        std::vector<FeatType> result;
+        for (auto type : selectable) {
+            if (isLevelUpCandidate(type, attributes, clazz)) {
+                result.push_back(type);
+            }
+        }
+        return result;
+    }
     std::vector<FeatDisplayEntry> getLevelUpDisplayEntries(const CreatureAttributes &, const CreatureClass &) const override { return {}; }
 };
 
@@ -440,4 +449,96 @@ TEST_F(AutoLevel, a_consular_gains_the_classpowergain_count_in_the_alignment_ord
     EXPECT_TRUE(after.hasSpell(static_cast<SpellType>(10)));
     EXPECT_TRUE(after.hasSpell(static_cast<SpellType>(23)));
     EXPECT_EQ(5, after.getClassLevel(ClassType::JediConsular));
+}
+
+// Self-directed level-ups (fork addition): what a guest seat may choose.
+
+TEST_F(AutoLevel, level_up_options_give_the_numbers_the_host_will_check) {
+    auto soldier = classes->get(ClassType::Soldier);
+    ASSERT_TRUE(soldier);
+    FakeFeats feats;
+    feats.selectable = {static_cast<FeatType>(0), static_cast<FeatType>(2), static_cast<FeatType>(5)};
+    feats.requires[static_cast<FeatType>(0)] = static_cast<FeatType>(2);
+    FakeSpells spells;
+    CreatureAttributes attributes;
+    attributes.addClassLevels(soldier.get(), 1);
+    attributes.setAbilityScore(Ability::Intelligence, 12);
+    attributes.setSkillRank(SkillType::Demolitions, 1);
+
+    auto options = coopLevelUpOptions(feats, spells, *soldier, attributes, false);
+    EXPECT_EQ(static_cast<int>(ClassType::Soldier), options.clazz);
+    EXPECT_EQ(2, options.level);
+    EXPECT_FALSE(options.abilityDue) << "level 2 is no fourth level";
+    EXPECT_EQ(12, options.abilities[static_cast<int>(Ability::Intelligence)]);
+    EXPECT_EQ(1, options.skillPoints) << "(2 + 1) / 2";
+    ASSERT_EQ(8u, options.skills.size());
+    for (const auto &skill : options.skills) {
+        bool classSkill = soldier->isClassSkill(static_cast<SkillType>(skill.id));
+        EXPECT_EQ(classSkill, skill.classSkill) << skill.id;
+        EXPECT_EQ(classSkill ? 1 : 2, skill.cost) << skill.id;
+        EXPECT_EQ(classSkill ? 5 : 2, skill.cap) << skill.id << ": level + 3, half for cross-class";
+    }
+    EXPECT_EQ(1, options.skills[static_cast<int>(SkillType::Demolitions)].rank);
+    EXPECT_EQ(1, options.featChoices);
+    // Feat 0 needs feat 2 first, so it is not a candidate yet.
+    std::vector<int> candidates;
+    for (const auto &pick : options.feats) {
+        candidates.push_back(pick.id);
+    }
+    EXPECT_THAT(candidates, UnorderedElementsAre(2, 5));
+    EXPECT_EQ(0, options.powerChoices);
+    EXPECT_TRUE(options.powers.empty());
+
+    // Recommended is what the game's own auto-level takes.
+    auto picks = autoLevelPicks(feats, spells, *soldier, attributes, false);
+    ASSERT_EQ(picks.feats.size(), options.recommended.feats.size());
+    EXPECT_EQ(static_cast<int>(picks.feats[0]), options.recommended.feats[0]);
+    EXPECT_EQ(picks.ability, options.recommended.ability);
+    EXPECT_EQ(options.clazz, options.recommended.clazz);
+}
+
+TEST_F(AutoLevel, level_up_options_offer_an_ability_point_only_on_a_fourth_level) {
+    auto soldier = classes->get(ClassType::Soldier);
+    ASSERT_TRUE(soldier);
+    FakeFeats feats;
+    FakeSpells spells;
+    CreatureAttributes attributes;
+    attributes.addClassLevels(soldier.get(), 3);
+    EXPECT_TRUE(coopLevelUpOptions(feats, spells, *soldier, attributes, false).abilityDue);
+    attributes.addClassLevels(soldier.get(), 1);
+    EXPECT_FALSE(coopLevelUpOptions(feats, spells, *soldier, attributes, false).abilityDue);
+}
+
+TEST_F(AutoLevel, level_up_options_are_one_line_of_json_with_a_choice_the_decoder_accepts) {
+    auto soldier = classes->get(ClassType::Soldier);
+    ASSERT_TRUE(soldier);
+    FakeFeats feats;
+    feats.selectable = {static_cast<FeatType>(2)};
+    FakeSpells spells;
+    CreatureAttributes attributes;
+    attributes.addClassLevels(soldier.get(), 1);
+
+    auto options = coopLevelUpOptions(feats, spells, *soldier, attributes, false);
+    options.feats[0].name = "Power \"Attack\"";
+    options.feats[0].description = std::string(900, 'x');
+    std::string line = coopLevelUpOptionsJson(options);
+    EXPECT_EQ(std::string::npos, line.find(static_cast<char>(10))) << "one line";
+    for (const char *key : {"\"class\":", "\"level\":2", "\"ability\":", "\"skills\":", "\"points\":", "\"feats\":",
+                            "\"powers\":", "\"candidates\":", "\"recommended\":", "\"name\":\"demolitions\""}) {
+        EXPECT_NE(std::string::npos, line.find(key)) << key;
+    }
+    EXPECT_NE(std::string::npos, line.find("Power \\\"Attack\\\"")) << "names are escaped";
+    EXPECT_EQ(std::string::npos, line.find(std::string(301, 'x'))) << "descriptions are cut";
+    CoopLevelUpChoice back;
+    EXPECT_TRUE(decodeCoopLevelUp(encodeCoopLevelUp(options.recommended), back));
+    EXPECT_EQ(options.recommended, back);
+}
+
+TEST(CoopCutText, never_ends_inside_a_character) {
+    EXPECT_EQ("abc", coopCutText("abc", 300));
+    EXPECT_EQ("abcd", coopCutText("abcdef", 4));
+    // U+00E9 is two bytes: a cut that would land between them backs off one.
+    std::string accented = std::string("ab") + static_cast<char>(0xC3) + static_cast<char>(0xA9) + "z";
+    EXPECT_EQ("ab", coopCutText(accented, 3));
+    EXPECT_EQ(accented.substr(0, 4), coopCutText(accented, 4));
 }

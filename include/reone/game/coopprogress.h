@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <map>
 #include <string>
@@ -14,8 +15,11 @@ namespace reone {
 namespace game {
 
 class CreatureAttributes;
+class CreatureClass;
 class Creature;
 class Game;
+class IFeats;
+class ISpells;
 
 /**
  * A co-op client's level-up for its companion (co-op design notes item 5):
@@ -57,6 +61,50 @@ net::CommandReject validateCoopLevelUp(Game &game, const Creature &companion, in
 
 /** Host: apply a validated level, as the level-up screen's finish does. */
 void applyCoopLevelUp(Game &game, Creature &companion, const CreatureAttributes &result);
+
+/**
+ * What a character may choose at its next level (fork addition). A guest seat
+ * driven from outside can read these and pick for itself instead of taking the
+ * Recommended set. They are the numbers the level-up screens work from and
+ * validateCoopLevelUp checks; the host still judges the choice it is sent.
+ */
+struct CoopLevelUpOptions {
+    struct Skill {
+        int id {0};
+        int rank {0};            // ranks held before the level
+        int cost {1};            // points a rank costs: 1 for a class skill, 2 otherwise
+        int cap {0};             // the highest rank allowed at the new level
+        bool classSkill {false};
+    };
+    struct Pick {
+        int id {0};
+        std::string name;
+        std::string description;
+    };
+
+    int clazz {-1};              // ClassType the level goes into
+    std::string className;
+    int level {0};               // the level being taken
+    bool abilityDue {false};     // one ability point, on every fourth level
+    std::array<int, 6> abilities {};
+    int skillPoints {0};         // before an ability point; raising Intelligence can add one
+    std::vector<Skill> skills;
+    int featChoices {0};
+    std::vector<Pick> feats;     // every feat that is a candidate now
+    int powerChoices {0};
+    std::vector<Pick> powers;    // every power that is a candidate now
+    CoopLevelUpChoice recommended; // the game's own picks, as Recommended makes them
+};
+
+/** The next level's options in a class, from attributes before the level. */
+CoopLevelUpOptions coopLevelUpOptions(const IFeats &feats, const ISpells &spells, const CreatureClass &clazz,
+                                      const CreatureAttributes &attributes, bool darkSide);
+
+/** text cut to at most limit bytes without splitting a UTF-8 character. */
+std::string coopCutText(const std::string &text, size_t limit);
+
+/** The options as one line of JSON, for the console. Descriptions are cut to 300 characters. */
+std::string coopLevelUpOptionsJson(const CoopLevelUpOptions &options);
 
 /**
  * Host: the sheet of the creature a client controls: what its character,

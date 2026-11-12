@@ -456,6 +456,12 @@ public:
     bool clientInCombat(uint32_t localId) const;
     /** The host's combat queue for a creature this client sees (net::QueueEntry slots), empty when none. */
     std::vector<net::QueueEntry> clientQueue(uint32_t localId) const;
+    /**
+     * Host, Free Mode (fork addition): hand a guest one item (the whole stack) from the
+     * host's own inventory. who is the player's name or client id; which is an item
+     * template or tag. Returns an empty string, or why nothing was given.
+     */
+    std::string hostGiveToGuest(const std::string &who, const std::string &which);
     /** Host test seam: a guest's credits. */
     bool setGuestCredits(uint32_t clientId, int credits);
     /** Host: every XP award the party gets goes to each guest too (design, "XP: mirrors the host"). */

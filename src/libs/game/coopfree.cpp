@@ -22,6 +22,7 @@
 #include "reone/game/d20/classes.h"
 #include "reone/game/d20/feats.h"
 #include "reone/game/d20/spells.h"
+#include "reone/game/equipmentrules.h"
 #include "reone/game/experience.h"
 #include "reone/game/game.h"
 #include "reone/game/gui/chargen.h"
@@ -1173,6 +1174,43 @@ bool CoopSession::clientPickReply(int row) {
     }
     submitRequest(CommandType::PickReply, 0, row);
     return true;
+}
+
+std::string CoopSession::hostGiveToGuest(const std::string &who, const std::string &which) {
+    if (!isHost() || !freeMode()) {
+        return "only the host of a Free Mode session can give";
+    }
+    auto giver = _game.party().actualPlayer();
+    if (!giver) {
+        return "there is no player to give from";
+    }
+    for (auto &[connection, client] : _clients) {
+        if (!boost::iequals(client.name, who) && std::to_string(client.clientId) != who) {
+            continue;
+        }
+        auto creature = client.guestId ? _game.getObjectById<Creature>(client.guestId) : nullptr;
+        if (!creature || !creature->isRuntimeLive() || creature->isDead()) {
+            return "that player's character is not here";
+        }
+        std::shared_ptr<Item> found;
+        for (const auto &item : giver->items()) {
+            if (item && !item->isEquipped() &&
+                (boost::iequals(item->blueprintResRef(), which) || boost::iequals(item->tag(), which))) {
+                found = item; // a copy: the transfer changes the list being read
+                break;
+            }
+        }
+        if (!found) {
+            return "no such item in the inventory";
+        }
+        if (!transferItemTo(_game, found, *creature)) {
+            return "the item could not be moved";
+        }
+        info("Co-op: the host gave " + found->tag() + " to " + client.name);
+        hostSendGuestInventory(client);
+        return "";
+    }
+    return "no such player";
 }
 
 bool CoopSession::setGuestCredits(uint32_t clientId, int credits) {

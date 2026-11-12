@@ -15,7 +15,13 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/json.hpp>
 
+#include "reone/game/coopprogress.h"
+#include "reone/game/d20/class.h"
+#include "reone/game/d20/classes.h"
+#include "reone/game/d20/feats.h"
+#include "reone/game/d20/spells.h"
 #include "reone/game/coopsession.h"
+#include "reone/game/equipmentrules.h"
 #include "reone/game/location.h"
 #include "reone/game/action/jumptolocation.h"
 #include "reone/resource/director.h"
@@ -649,6 +655,113 @@ void Game::initCoopConsole() {
         session.clientEquip(item, *slot);
         _console.printLine("coop equip slot=" + std::to_string(*slot) + " host_item=" + std::to_string(item ? session.clientHostItemId(item->id()) : 0));
     });
+    // Self-directed equipment (fork addition): what the controlled character wears, what it
+    // carries, and where each carried item may go by the game's own rules. The host still
+    // judges every coopequip it is sent.
+    _console.registerCommand("coopgear", "co-op client: the controlled character's equipment and the items it carries, as one line of JSON", [=](const ConsoleArgs &) {
+        namespace json = boost::json;
+        auto &session = clientSession();
+        auto member = std::dynamic_pointer_cast<Creature>(session.localObjectForHost(session.controlledHostId()));
+        if (!member) {
+            throw std::runtime_error("no companion");
+        }
+        static const std::pair<int, const char *> kSlots[] = {
+            {InventorySlots::head, "head"}, {InventorySlots::body, "body"}, {InventorySlots::hands, "hands"},
+            {InventorySlots::rightWeapon, "main hand"}, {InventorySlots::leftWeapon, "off hand"},
+            {InventorySlots::leftArm, "left arm"}, {InventorySlots::rightArm, "right arm"},
+            {InventorySlots::implant, "implant"}, {InventorySlots::belt, "belt"}};
+        auto describe = [](const Item &item) {
+            json::object entry;
+            entry["tpl"] = item.blueprintResRef();
+            entry["tag"] = item.tag();
+            entry["name"] = item.localizedName();
+            entry["description"] = coopCutText(item.descIdentified().empty() ? item.description() : item.descIdentified(), 300);
+            entry["baseItem"] = item.baseItemType();
+            entry["stack"] = item.stackSize();
+            return entry;
+        };
+        json::object root;
+        json::array worn;
+        for (const auto &[slot, name] : kSlots) {
+            json::object entry;
+            entry["slot"] = slot;
+            entry["name"] = name;
+            if (auto item = member->getEquippedItem(slot)) {
+                entry["item"] = describe(*item);
+            }
+            worn.push_back(std::move(entry));
+        }
+        root["slots"] = std::move(worn);
+        json::array bag;
+        if (auto player = _party.player()) {
+            for (const auto &item : player->items()) {
+                if (!item || !session.clientHostItemId(item->id())) {
+                    continue;
+                }
+                auto entry = describe(*item);
+                json::array fits;
+                const char *cannot = nullptr;
+                for (const auto &[slot, name] : kSlots) {
+                    auto decision = evaluateEquipmentCandidate(*member, slot, item.get());
+                    if (decision.valid) {
+                        fits.push_back(slot);
+                        continue;
+                    }
+                    switch (decision.reason) {
+                    case EquipmentCandidateReason::MissingRequiredFeat:
+                        cannot = "needs training this character does not have";
+                        break;
+                    case EquipmentCandidateReason::WrongBodyType:
+                    case EquipmentCandidateReason::SubraceDenied:
+                        cannot = "not made for this kind of character";
+                        break;
+                    default:
+                        break;
+                    }
+                }
+                if (fits.empty() && cannot) {
+                    entry["cannot"] = cannot;
+                }
+                entry["slots"] = std::move(fits);
+                bag.push_back(std::move(entry));
+            }
+        }
+        root["bag"] = std::move(bag);
+        _console.printLine(json::serialize(root));
+    });
+    _console.registerCommand("coopgive", "co-op Free Mode host: hand a guest an item from your inventory: coopgive <player name|client id> <template|tag>", [this](const ConsoleArgs &args) {
+        if (args.size() != 3) {
+            throw std::runtime_error("Usage: coopgive <player name|client id> <template|tag>");
+        }
+        if (!_coop || !_coop->isHost()) {
+            throw std::runtime_error("only the host can give");
+        }
+        auto why = _coop->hostGiveToGuest(std::string(*args[1]), std::string(*args[2]));
+        if (!why.empty()) {
+            throw std::runtime_error(why);
+        }
+        _console.printLine("coop gave " + std::string(*args[2]) + " to " + std::string(*args[1]));
+    });
+    _console.registerCommand("coopbag", "co-op host: the items in your inventory that coopgive can hand to a guest, as one line of JSON", [this](const ConsoleArgs &) {
+        namespace json = boost::json;
+        if (!_coop || !_coop->isHost()) {
+            throw std::runtime_error("only the host has a bag to give from");
+        }
+        json::array list;
+        if (auto giver = _party.actualPlayer()) {
+            for (const auto &item : giver->items()) {
+                if (!item || item->isEquipped() || item->blueprintResRef().empty() || list.size() >= 200) {
+                    continue;
+                }
+                json::object entry;
+                entry["tpl"] = item->blueprintResRef();
+                entry["name"] = item->localizedName();
+                entry["stack"] = item->stackSize();
+                list.push_back(std::move(entry));
+            }
+        }
+        _console.printLine(json::serialize(list));
+    });
     _console.registerCommand("cooplevelup", "co-op client: level up the companion through the level-up screens (Recommended): cooplevelup", [=](const ConsoleArgs &) {
         auto &session = clientSession();
         auto member = std::dynamic_pointer_cast<Creature>(session.localObjectForHost(session.controlledHostId()));
@@ -660,6 +773,45 @@ void Game::initCoopConsole() {
         }
         auto outcome = levelUpThroughScreen(member, true);
         _console.printLine("coop levelup " + (outcome.empty() ? std::string("(screens did not run)") : outcome));
+    });
+    // Self-directed level-ups (fork addition): a guest seat driven from outside reads what it
+    // may take and sends its own choice. The host judges it exactly as it judges the screens'.
+    _console.registerCommand("cooplevelupoptions", "co-op client: what the controlled character may choose at its next level, as one line of JSON", [=](const ConsoleArgs &) {
+        auto &session = clientSession();
+        auto member = std::dynamic_pointer_cast<Creature>(session.localObjectForHost(session.controlledHostId()));
+        if (!member) {
+            throw std::runtime_error("no companion");
+        }
+        if (!session.clientMayLevelUp()) {
+            throw std::runtime_error("no level-up allowed now");
+        }
+        std::shared_ptr<CreatureClass> clazz;
+        try {
+            clazz = _services.game.classes.get(member->attributes().getEffectiveClass());
+        } catch (const std::exception &) {
+            clazz.reset();
+        }
+        if (!clazz) {
+            throw std::runtime_error("the character's class did not load");
+        }
+        auto options = coopLevelUpOptions(_services.game.feats, _services.game.spells, *clazz, member->attributes(), member->goodEvil() < 50);
+        _console.printLine(coopLevelUpOptionsJson(options));
+    });
+    _console.registerCommand("cooplevelupchoose", "co-op client: ask the host for the next level with these choices, checked by the host against the game's rules: cooplevelupchoose c<class>|a<ability>|s<skill>:<ranks>,...|f<feat>,...|p<power>,...", [=](const ConsoleArgs &args) {
+        if (args.size() != 2) {
+            throw std::runtime_error("Usage: cooplevelupchoose c<class>|a<ability>|s<skill>:<ranks>,...|f<feat>,...|p<power>,...");
+        }
+        if (!clientSession().clientMayLevelUp()) {
+            throw std::runtime_error("no level-up allowed now");
+        }
+        CoopLevelUpChoice choice;
+        if (!decodeCoopLevelUp(std::string(*args[1]), choice)) {
+            throw std::runtime_error("that is not a level-up choice");
+        }
+        net::Command command;
+        command.type = net::CommandType::LevelUp;
+        command.item = encodeCoopLevelUp(choice);
+        submit(command, "level_up");
     });
     _console.registerCommand("coophandover", "co-op host: hand a terminal or console to a player: coophandover <client id> <object id|tag> [1|0]", [this](const ConsoleArgs &args) {
         if (!_coop || !_coop->isHost()) {

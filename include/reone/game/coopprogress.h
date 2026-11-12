@@ -107,6 +107,25 @@ std::string coopCutText(const std::string &text, size_t limit);
 std::string coopLevelUpOptionsJson(const CoopLevelUpOptions &options);
 
 /**
+ * What a character is and can do, in the game's own names (fork addition), as one
+ * line of JSON: classes and levels, abilities, skills, the feats and powers it holds,
+ * vitality and alignment. For a guest seat driven from outside, which must act by its
+ * own sheet. Read-only; descriptions are cut to 200 characters.
+ */
+struct CoopOwnSheetState {
+    std::array<int, 8> skillValues {}; // ranks with the ability and what is worn, as a check reads them
+    std::array<bool, 8> skillUntrained {true, true, true, true, true, true, true, true}; // usable with no ranks (skills.2da)
+    int hitPoints {0};
+    int maxHitPoints {0};
+    int force {0};
+    int maxForce {0};
+    int alignment {50}; // 0 dark to 100 light
+    int xp {0};
+};
+std::string coopOwnSheetJson(const IFeats &feats, const ISpells &spells, const CreatureAttributes &attributes,
+                             const CoopOwnSheetState &state);
+
+/**
  * Host: the sheet of the creature a client controls: what its character,
  * equipment and level-up screens show. levelUpAllowed carries the host's cap.
  */

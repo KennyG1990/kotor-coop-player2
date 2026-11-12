@@ -76,6 +76,9 @@ Guest (client) console:
 - `cooplevelupchoose <choice>`: send a chosen set. `validateCoopLevelUp` on the host is
   still the only judge; `coopresult <seq>` gives its answer.
 - `coopgear`: what the character wears and carries, and where each item may go.
+- `coopsheet`: what the character is and can do, as JSON in the game's own names: classes
+  and levels, abilities, each skill's ranks, the value a check reads and whether it can be
+  used untrained (skills.2da), the feats and powers held, vitality, alignment. Read-only.
 
 Host console:
 

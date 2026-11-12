@@ -19,6 +19,7 @@
 #include "reone/game/d20/class.h"
 #include "reone/game/d20/classes.h"
 #include "reone/game/d20/feats.h"
+#include "reone/game/d20/skills.h"
 #include "reone/game/d20/spells.h"
 #include "reone/game/coopsession.h"
 #include "reone/game/equipmentrules.h"
@@ -854,6 +855,29 @@ void Game::initCoopConsole() {
         }
         auto options = coopLevelUpOptions(_services.game.feats, _services.game.spells, *clazz, member->attributes(), member->goodEvil() < 50);
         _console.printLine(coopLevelUpOptionsJson(options));
+    });
+    // Self-knowledge (fork addition): what the controlled character is and can do, read by a
+    // seat driven from outside so that it speaks and chooses by its own sheet. Read-only.
+    _console.registerCommand("coopsheet", "co-op client: the controlled character's classes, abilities, skills, feats and powers, as one line of JSON", [=](const ConsoleArgs &) {
+        auto &session = clientSession();
+        auto member = std::dynamic_pointer_cast<Creature>(session.localObjectForHost(session.controlledHostId()));
+        if (!member) {
+            throw std::runtime_error("no companion");
+        }
+        CoopOwnSheetState state;
+        for (int i = 0; i < 8; ++i) {
+            state.skillValues[i] = member->getSkillValue(static_cast<SkillType>(i));
+            if (auto skill = _services.game.skills.get(static_cast<SkillType>(i))) {
+                state.skillUntrained[i] = skill->untrained;
+            }
+        }
+        state.hitPoints = member->currentHitPoints();
+        state.maxHitPoints = member->maxHitPoints();
+        state.force = member->currentForce();
+        state.maxForce = member->maxForcePoints();
+        state.alignment = member->goodEvil();
+        state.xp = member->xp();
+        _console.printLine(coopOwnSheetJson(_services.game.feats, _services.game.spells, member->attributes(), state));
     });
     _console.registerCommand("cooplevelupchoose", "co-op client: ask the host for the next level with these choices, checked by the host against the game's rules: cooplevelupchoose c<class>|a<ability>|s<skill>:<ranks>,...|f<feat>,...|p<power>,...", [=](const ConsoleArgs &args) {
         if (args.size() != 2) {

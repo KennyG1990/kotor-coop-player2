@@ -477,6 +477,82 @@ std::string coopLevelUpOptionsJson(const CoopLevelUpOptions &options) {
     return json::serialize(root);
 }
 
+std::string coopOwnSheetJson(const IFeats &feats, const ISpells &spells, const CreatureAttributes &attributes,
+                             const CoopOwnSheetState &state) {
+    namespace json = boost::json;
+    static const char *kAbilityNames[] = {"strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"};
+    static const char *kSkillNames[] = {"computeruse", "demolitions", "stealth", "awareness",
+                                        "persuade", "repair", "security", "treatinjury"};
+    json::object root;
+    json::array classes;
+    for (const auto &[clazz, level] : attributes.classLevels()) {
+        if (!clazz) {
+            continue;
+        }
+        json::object entry;
+        entry["id"] = static_cast<int>(clazz->type());
+        entry["name"] = clazz->name();
+        entry["level"] = level;
+        classes.push_back(std::move(entry));
+    }
+    root["classes"] = std::move(classes);
+    root["level"] = attributes.getAggregateLevel();
+    json::array abilities;
+    for (int i = 0; i < 6; ++i) {
+        json::object entry;
+        entry["name"] = kAbilityNames[i];
+        entry["score"] = attributes.getAbilityScore(static_cast<Ability>(i));
+        entry["modifier"] = attributes.getAbilityModifier(static_cast<Ability>(i));
+        abilities.push_back(std::move(entry));
+    }
+    root["abilities"] = std::move(abilities);
+    json::array skills;
+    for (int i = 0; i < 8; ++i) {
+        json::object entry;
+        entry["id"] = i;
+        entry["name"] = kSkillNames[i];
+        entry["rank"] = attributes.getSkillRank(static_cast<SkillType>(i));
+        entry["value"] = state.skillValues[i];
+        entry["untrained"] = state.skillUntrained[i];
+        skills.push_back(std::move(entry));
+    }
+    root["skills"] = std::move(skills);
+    // A feat or power the game has no name for is one the player is never shown either.
+    json::array held;
+    for (auto type : attributes.feats()) {
+        auto feat = feats.get(type);
+        if (!feat || feat->name.empty()) {
+            continue;
+        }
+        json::object entry;
+        entry["id"] = static_cast<int>(type);
+        entry["name"] = feat->name;
+        entry["description"] = coopCutText(feat->description, 200);
+        held.push_back(std::move(entry));
+    }
+    root["feats"] = std::move(held);
+    json::array powers;
+    for (auto type : attributes.spells()) {
+        auto spell = spells.get(type);
+        if (!spell || spell->name.empty()) {
+            continue;
+        }
+        json::object entry;
+        entry["id"] = static_cast<int>(type);
+        entry["name"] = spell->name;
+        entry["description"] = coopCutText(spell->description, 200);
+        powers.push_back(std::move(entry));
+    }
+    root["powers"] = std::move(powers);
+    root["hp"] = state.hitPoints;
+    root["maxHp"] = state.maxHitPoints;
+    root["force"] = state.force;
+    root["maxForce"] = state.maxForce;
+    root["alignment"] = state.alignment;
+    root["xp"] = state.xp;
+    return json::serialize(root);
+}
+
 CharacterSheet coopCharacterSheet(const Creature &creature, bool levelUpAllowed) {
     CharacterSheet sheet;
     sheet.creature = creature.id();

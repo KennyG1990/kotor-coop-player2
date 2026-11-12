@@ -296,9 +296,13 @@ class FakeFeats : public IFeats {
 public:
     std::set<FeatType> selectable;
     std::map<FeatType, FeatType> requires;
+    std::map<FeatType, std::shared_ptr<Feat>> named;
 
     void init() override {}
-    std::shared_ptr<Feat> get(FeatType) const override { return nullptr; }
+    std::shared_ptr<Feat> get(FeatType type) const override {
+        auto it = named.find(type);
+        return it != named.end() ? it->second : nullptr;
+    }
     int getLevelUpChoiceCount(const CreatureAttributes &attributes, const CreatureClass &clazz) const override {
         return clazz.getFeatGain(attributes.getClassLevel(clazz.type()) + 1);
     }
@@ -532,6 +536,52 @@ TEST_F(AutoLevel, level_up_options_are_one_line_of_json_with_a_choice_the_decode
     CoopLevelUpChoice back;
     EXPECT_TRUE(decodeCoopLevelUp(encodeCoopLevelUp(options.recommended), back));
     EXPECT_EQ(options.recommended, back);
+}
+
+// Self-knowledge (fork addition): what a character is and can do, in the game's own names.
+
+TEST_F(AutoLevel, own_sheet_names_what_the_character_holds_and_only_that) {
+    auto soldier = classes->get(ClassType::Soldier);
+    ASSERT_TRUE(soldier);
+    FakeFeats feats;
+    auto twoWeapon = std::make_shared<Feat>();
+    twoWeapon->name = "Two-Weapon \"Fighting\"";
+    twoWeapon->description = std::string(900, 'x');
+    feats.named[static_cast<FeatType>(3)] = twoWeapon;
+    auto notHeld = std::make_shared<Feat>();
+    notHeld->name = "Sniper Shot";
+    feats.named[static_cast<FeatType>(9)] = notHeld;
+    feats.named[static_cast<FeatType>(4)] = std::make_shared<Feat>(); // no name: never shown to a player
+    FakeSpells spells;
+    auto push = std::make_shared<Spell>();
+    push->name = "Force Push";
+    push->description = "Throws a target back.";
+    spells.spells[static_cast<SpellType>(23)] = push;
+    CreatureAttributes attributes;
+    attributes.addClassLevels(soldier.get(), 3);
+    attributes.setAbilityScore(Ability::Intelligence, 14);
+    attributes.setSkillRank(SkillType::ComputerUse, 6);
+    attributes.addFeat(static_cast<FeatType>(3));
+    attributes.addFeat(static_cast<FeatType>(4));
+    attributes.addSpell(static_cast<SpellType>(23));
+    CoopOwnSheetState state;
+    state.skillValues[0] = 8;
+    state.skillUntrained[1] = false;
+    state.hitPoints = 21;
+    state.maxHitPoints = 30;
+    state.alignment = 35;
+
+    std::string line = coopOwnSheetJson(feats, spells, attributes, state);
+    EXPECT_EQ(std::string::npos, line.find(static_cast<char>(10))) << "one line";
+    for (const char *key : {"\"level\":3", "\"name\":\"intelligence\",\"score\":14,\"modifier\":2",
+                            "\"name\":\"computeruse\",\"rank\":6,\"value\":8,\"untrained\":true",
+                            "\"name\":\"demolitions\",\"rank\":0,\"value\":0,\"untrained\":false",
+                            "Two-Weapon \\\"Fighting\\\"", "\"name\":\"Force Push\"", "\"hp\":21", "\"maxHp\":30", "\"alignment\":35"}) {
+        EXPECT_NE(std::string::npos, line.find(key)) << key;
+    }
+    EXPECT_EQ(std::string::npos, line.find("Sniper Shot")) << "a feat it does not hold is not listed";
+    EXPECT_EQ(std::string::npos, line.find("\"id\":4,\"name\":\"\"")) << "a feat without a name is left out";
+    EXPECT_EQ(std::string::npos, line.find(std::string(201, 'x'))) << "descriptions are cut";
 }
 
 TEST(CoopCutText, never_ends_inside_a_character) {

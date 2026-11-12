@@ -88,7 +88,9 @@ Guest (client) console:
 - `coopgear`: what the character wears and carries, and where each item may go.
 - `coopsheet`: what the character is and can do, as JSON in the game's own names: classes
   and levels, abilities, each skill's ranks, the value a check reads and whether it can be
-  used untrained (skills.2da), the feats and powers held, vitality, alignment. Read-only.
+  used untrained (skills.2da), the feats and powers held, vitality. Read-only. (A guest's
+  copy of its character is not sent its alignment; the host's `netstatus` gives each
+  guest character's `alignment`.)
 
 Host console:
 

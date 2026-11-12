@@ -3456,6 +3456,7 @@ json::object CoopSession::statusJson() const {
                     guest["position"] = json::array {creature->position().x, creature->position().y, creature->position().z};
                     guest["hp"] = creature->currentHitPoints();
                     guest["level"] = creature->attributes().getAggregateLevel();
+                    guest["alignment"] = creature->goodEvil(); // 0 dark to 100 light, as the host's game holds it
                     guest["inParty"] = _game.party().isMember(*creature);
                     guest["puppet"] = creature->isPuppet();
                     // Items carrying upgrades (template@bits), from the bag and the equipment.

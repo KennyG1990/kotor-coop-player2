@@ -666,17 +666,17 @@ TEST_F(AutoLevel, own_sheet_names_what_the_character_holds_and_only_that) {
     state.skillUntrained[1] = false;
     state.hitPoints = 21;
     state.maxHitPoints = 30;
-    state.alignment = 35;
 
     std::string line = coopOwnSheetJson(feats, spells, attributes, state);
     EXPECT_EQ(std::string::npos, line.find(static_cast<char>(10))) << "one line";
     for (const char *key : {"\"level\":3", "\"name\":\"intelligence\",\"score\":14,\"modifier\":2",
                             "\"name\":\"computeruse\",\"rank\":6,\"value\":8,\"untrained\":true",
                             "\"name\":\"demolitions\",\"rank\":0,\"value\":0,\"untrained\":false",
-                            "Two-Weapon \\\"Fighting\\\"", "\"name\":\"Force Push\"", "\"hp\":21", "\"maxHp\":30", "\"alignment\":35"}) {
+                            "Two-Weapon \\\"Fighting\\\"", "\"name\":\"Force Push\"", "\"hp\":21", "\"maxHp\":30"}) {
         EXPECT_NE(std::string::npos, line.find(key)) << key;
     }
     EXPECT_EQ(std::string::npos, line.find("Sniper Shot")) << "a feat it does not hold is not listed";
+    EXPECT_EQ(std::string::npos, line.find("alignment")) << "a guest's copy is not sent its alignment, so none is printed";
     EXPECT_EQ(std::string::npos, line.find("\"id\":4,\"name\":\"\"")) << "a feat without a name is left out";
     EXPECT_EQ(std::string::npos, line.find(std::string(201, 'x'))) << "descriptions are cut";
 }

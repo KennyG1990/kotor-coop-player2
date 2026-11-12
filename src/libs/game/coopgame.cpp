@@ -875,7 +875,6 @@ void Game::initCoopConsole() {
         state.maxHitPoints = member->maxHitPoints();
         state.force = member->currentForce();
         state.maxForce = member->maxForcePoints();
-        state.alignment = member->goodEvil();
         state.xp = member->xp();
         _console.printLine(coopOwnSheetJson(_services.game.feats, _services.game.spells, member->attributes(), state));
     });

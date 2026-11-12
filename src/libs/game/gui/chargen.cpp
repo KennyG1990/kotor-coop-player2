@@ -466,7 +466,11 @@ void CharacterGeneration::finish() {
         if (auto *coop = _game.coop(); coop && coop->clientNeedsGuest()) {
             // Co-op Free Mode: this is the guest's own character. It is saved
             // on this machine and brought to the host's game.
-            coop->clientSetGuest(coopGuestFromCharacter(_game, _character));
+            auto guest = coopGuestFromCharacter(_game, _character);
+            if (_automationGoodEvil >= 0 && _automationGoodEvil <= 100) {
+                guest.goodEvil = static_cast<uint8_t>(_automationGoodEvil); // fork addition: a chosen starting alignment
+            }
+            coop->clientSetGuest(guest);
             if (_game.module()) {
                 _game.openInGame();
             } // else the host's module loads next and opens the game
@@ -532,7 +536,8 @@ const Character *CharacterGeneration::quickCharacterForAutomation(int classSlot)
     return _classSelection ? _classSelection->classButtonCharacter(classSlot) : nullptr;
 }
 
-void CharacterGeneration::finishQuickForAutomation(int classSlot, std::string name, const CreatureAttributes *attributes) {
+void CharacterGeneration::finishQuickForAutomation(int classSlot, std::string name, const CreatureAttributes *attributes,
+                                                   int goodEvil) {
     const Character *slot = _classSelection ? _classSelection->classButtonCharacter(classSlot) : nullptr;
     if (!slot) {
         throw std::out_of_range("Class slot is out of range: " + std::to_string(classSlot));
@@ -548,7 +553,9 @@ void CharacterGeneration::finishQuickForAutomation(int classSlot, std::string na
         setCharacterName(std::move(name));
     }
     _type = Type::Quick;
+    _automationGoodEvil = goodEvil;
     finish();
+    _automationGoodEvil = -1;
 }
 
 void CharacterGeneration::setCharacter(Character character) {

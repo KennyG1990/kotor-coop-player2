@@ -57,8 +57,16 @@ public:
 
     const std::deque<Entry> &entries() const { return _entries; }
 
+    /**
+     * How many conversation lines have been logged since the game started (fork
+     * addition). It only counts up, so a reader that polls can tell which of the
+     * kept lines are new to it. Nothing in the game reads it.
+     */
+    uint64_t dialogCount() const { return _dialogCount; }
+
 private:
     std::deque<Entry> _entries;
+    uint64_t _dialogCount {0};
 };
 
 } // namespace game

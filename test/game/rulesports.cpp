@@ -182,6 +182,20 @@ TEST_F(RulesPorts, kotor_shows_no_force_healing_line) {
     EXPECT_TRUE(lines().empty());
 }
 
+// Fork addition: a count of conversation lines, for a reader that polls the dialog log.
+TEST(MessageLogDialogCount, counts_spoken_lines_only_and_only_goes_up) {
+    MessageLog log;
+    EXPECT_EQ(0u, log.dialogCount());
+    log.addDialog("Trask", "This way!");
+    log.addDialog("", "   "); // a silent node
+    log.add(MessageLog::kFeedbackMessageType, MessageLog::Style::Normal, "You have failed to unlock it.");
+    log.addDialog("Dunta", "Lead on.");
+    EXPECT_EQ(2u, log.dialogCount());
+    EXPECT_EQ(3u, log.entries().size());
+    log.reset();
+    EXPECT_EQ(2u, log.dialogCount());
+}
+
 TEST(RulesPortsLog, an_empty_line_is_not_written) {
     MessageLog log;
     log.add(MessageLog::kFeedbackMessageType, MessageLog::Style::Normal, "");

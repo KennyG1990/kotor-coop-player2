@@ -32,6 +32,7 @@ void MessageLog::addDialog(const std::string &speaker, const std::string &text) 
     if (text.find_first_not_of(kBlank) == std::string::npos) {
         return; // a silent node (camera or script only)
     }
+    ++_dialogCount;
     add(kDialogMessageType, Style::Normal, dialogLine(speaker, text));
 }
 

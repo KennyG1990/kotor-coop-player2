@@ -825,6 +825,26 @@ void Game::consoleCompanionState(const ConsoleArgs &args) {
     // The names the game shows the player for where the party is.
     root["moduleName"] = _module ? json::value(_module->localizedName()) : json::value(nullptr);
     root["areaName"] = area ? json::value(area->localizedName()) : json::value(nullptr);
+    // The player's character as the game's dialog log names it, and where the game's
+    // own measure puts them between dark (0) and light (100).
+    if (auto player = _party.player()) {
+        root["player"] = player->name();
+        root["playerAlignment"] = player->goodEvil();
+    }
+    // The newest lines of the game's own dialog log (the Messages screen): what was said
+    // in conversations, the player's chosen lines among them, each as "Speaker: text".
+    // count only goes up, so a reader that polls knows which lines are new to it.
+    json::object dialog;
+    dialog["count"] = _messageLog.dialogCount();
+    json::array lines;
+    const auto &entries = _messageLog.entries();
+    for (auto it = entries.rbegin(); it != entries.rend() && lines.size() < 12; ++it) {
+        if (it->type == MessageLog::kDialogMessageType) {
+            lines.insert(lines.begin(), json::value(it->text));
+        }
+    }
+    dialog["lines"] = std::move(lines);
+    root["dialog"] = std::move(dialog);
     _console.printLine(json::serialize(root));
 }
 

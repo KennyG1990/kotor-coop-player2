@@ -78,7 +78,9 @@ Guest (client) console:
 - `coopnewguest <class slot> <name> <choice>`: quick creation with a chosen set, written
   as `cooplevelupchoose` takes it. The choice is held to the creation screens' rules
   (`applyCoopCreationChoice`) or refused with the reason. Without the third argument the
-  command is what it was: the class's own character, with no skill ranks.
+  command is what it was: the class's own character, with no skill ranks. A fourth
+  argument, 0 to 100, is where the new character starts between dark and light in place
+  of the neutral 50.
 - `cooplevelupoptions`: what the controlled character may choose at its next level, as
   JSON (points, costs, caps, legal feats and powers, the Recommended set).
 - `cooplevelupchoose <choice>`: send a chosen set. `validateCoopLevelUp` on the host is
@@ -107,6 +109,11 @@ Host console:
   workbench's talk: it is not mirrored to guests and nobody is held by it.
 - `conversationstats`: what those checks read from the player's character (Persuade,
   level, Charisma, Affect Mind, Dominate Mind, alignment).
+- `companionstate`: played seconds and the names of the module and area, the player
+  character's name and alignment, and the newest lines of the game's own dialog log
+  (the Messages screen), each as "Speaker: text", with a count that only goes up so a
+  reader that polls knows which lines are new. The player's chosen lines are among them.
+  Read-only, and kept out of `dumpstate`, which the determinism test hashes.
 
 ## Joining by IP:port
 

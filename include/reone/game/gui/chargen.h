@@ -97,13 +97,16 @@ public:
      * default portrait. An empty name keeps the randomly generated one. For
      * scripted headless runs.
      */
-    void finishQuickForAutomation(int classSlot, std::string name, const CreatureAttributes *attributes = nullptr);
+    void finishQuickForAutomation(int classSlot, std::string name, const CreatureAttributes *attributes = nullptr,
+                                  int goodEvil = -1);
 
     /**
      * The character a class slot (0-5) would start with, or null (fork addition).
      * finishQuickForAutomation takes attributes built from it in place of the
      * class's own: a character whose skills and first feat were chosen outside
      * the screens, by the screens' rules (coopprogress.h, applyCoopCreationChoice).
+     * goodEvil, when 0 to 100, is where a co-op guest's new character starts between
+     * dark and light in place of the neutral 50.
      */
     const Character *quickCharacterForAutomation(int classSlot) const;
 
@@ -213,6 +216,7 @@ private:
 
     CharGenScreen _screen {CharGenScreen::ClassSelection};
     Type _type {Type::Quick};
+    int _automationGoodEvil {-1}; // fork addition: a chosen starting alignment for finishQuickForAutomation, -1 for none
     Character _character;
     RuntimeObjectRef<Creature> _levelUpMember;
 

@@ -982,7 +982,7 @@ void Game::initCoopConsole() {
         }
         _console.printLine(coopLevelUpOptionsJson(coopCreationOptions(_services.game.feats, *clazz, character->attributes)));
     });
-    _console.registerCommand("coopnewguest", "co-op Free Mode client: make the guest character with quick character generation: coopnewguest [class slot 0-5] [name] [choice, as cooplevelupchoose takes it]", [=](const ConsoleArgs &args) {
+    _console.registerCommand("coopnewguest", "co-op Free Mode client: make the guest character with quick character generation: coopnewguest [class slot 0-5] [name] [choice, as cooplevelupchoose takes it] [alignment 0-100]", [=](const ConsoleArgs &args) {
         auto &session = clientSession();
         if (!session.clientNeedsGuest()) {
             throw std::runtime_error("no guest character is needed");
@@ -1019,7 +1019,12 @@ void Game::initCoopConsole() {
             if (!why.empty()) {
                 throw std::runtime_error(why);
             }
-            _charGen->finishQuickForAutomation(slot, name, &attributes);
+            // Where the new character starts between dark (0) and light (100); the game's own 50 when not given.
+            int goodEvil = args.size() > 4 ? args.get<int>(4).value_or(-1) : -1;
+            if (args.size() > 4 && (goodEvil < 0 || goodEvil > 100)) {
+                throw std::runtime_error("alignment is a whole number from 0 to 100");
+            }
+            _charGen->finishQuickForAutomation(slot, name, &attributes, goodEvil);
         } else {
             _charGen->finishQuickForAutomation(slot, name);
         }

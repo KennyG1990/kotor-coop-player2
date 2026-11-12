@@ -27,6 +27,7 @@
 #include "presentationpointer.h"
 
 #include "reone/audio/source.h"
+#include "reone/game/outsidedialog.h"
 #include "reone/graphics/cursor.h"
 #include "reone/graphics/types.h"
 #include "reone/input/event.h"
@@ -662,6 +663,23 @@ public:
     void startCharacterGeneration();
     void startDialog(const std::shared_ptr<Object> &owner, const std::string &resRef,
                      GlobalFade::DialogTicket admission = {});
+
+    // BEGIN fork addition: a conversation driven from outside (outsidedialog.h)
+    /**
+     * Run a conversation that was built in memory on the standard conversation
+     * screen, with `owner` as the one being spoken to. Replaces an outside
+     * conversation that is running; refuses while any other conversation,
+     * a movie or a screen other than the game is up. Returns an empty
+     * string, or why it did not start.
+     */
+    std::string startOutsideDialog(const std::shared_ptr<Object> &owner, OutsideDialog built);
+    /** True while a conversation started by startOutsideDialog is the one on screen. */
+    bool outsideDialogRunning() const;
+    /** Cuts an outside conversation off. No-op when none runs. */
+    void closeOutsideDialog();
+    /** Where the outside conversation is, or where the last one ended, as one line of JSON. */
+    std::string outsideDialogStateJson() const;
+    // END fork addition
 
     GlobalFade &globalFade() { return _globalFade; }
     const GlobalFade &globalFade() const { return _globalFade; }
@@ -1557,6 +1575,12 @@ private:
     std::unique_ptr<ConfirmPopup> _confirmPopup;
     bool _tutorialWindowsEnabled {true};
     std::string _lastConversation;
+    // Fork addition: the conversation driven from outside, the node it is on (or ended on), and how many were opened.
+    OutsideDialog _outsideDialog;
+    OutsideDialogNode _outsideNode;
+    int _outsideEntry {-1};
+    uint32_t _outsideOpened {0};
+    void noteOutsideDialogNode();
     std::unique_ptr<ContainerGUI> _container;
     std::unique_ptr<PartySelection> _partySelect;
     std::unique_ptr<SaveLoad> _saveLoad;

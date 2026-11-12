@@ -741,6 +741,13 @@ void Module::onCreatureClick(const std::shared_ptr<Creature> &creature) {
 
     std::shared_ptr<Creature> partyLeader(_game.party().getLeader());
 
+    // Fork addition: a guest seat marked as talkable (hostSetTalkable) is spoken to by clicking them.
+    if (!creature->isDead()) {
+        if (auto *coop = _game.coop(); coop && coop->hostTalkClick(*creature)) {
+            return;
+        }
+    }
+
     if (creature->isDead()) {
         if (!creature->items().empty()) {
             partyLeader->clearAllActions();

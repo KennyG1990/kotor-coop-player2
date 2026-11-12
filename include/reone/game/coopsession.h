@@ -462,6 +462,15 @@ public:
      * template or tag. Returns an empty string, or why nothing was given.
      */
     std::string hostGiveToGuest(const std::string &who, const std::string &which);
+    /**
+     * Host (fork addition): mark a guest as one the host talks to by clicking their
+     * character, as with a party member. Off for every guest unless set; a program
+     * that drives a seat from outside sets it for its own seat. Returns false when
+     * there is no such player.
+     */
+    bool hostSetTalkable(const std::string &who, bool on);
+    /** Host: the host clicked `creature`. True when it was a talkable guest, whose request to talk is then counted. */
+    bool hostTalkClick(const Creature &creature);
     /** Host test seam: a guest's credits. */
     bool setGuestCredits(uint32_t clientId, int credits);
     /** Host: every XP award the party gets goes to each guest too (design, "XP: mirrors the host"). */
@@ -643,6 +652,9 @@ private:
         // (0 while away), the store it trades with, and what it was last sent.
         bool guestReceived {false};
         uint32_t guestId {0};
+        // Fork addition: the host talks to this guest by clicking their character; how often they have.
+        bool talkable {false};
+        uint32_t talkRequests {0};
         uint32_t storeOpen {0};
         std::vector<uint8_t> storeSent;
         // The workbench or lab this player has open (either mode), and what it was last sent.

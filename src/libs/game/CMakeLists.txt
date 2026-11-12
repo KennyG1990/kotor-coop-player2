@@ -27,6 +27,7 @@ set(GAME_HEADERS
     ${GAME_INCLUDE_DIR}/cooploot.h
     ${GAME_INCLUDE_DIR}/coopidmap.h
     ${GAME_INCLUDE_DIR}/coopprompts.h
+    ${GAME_INCLUDE_DIR}/outsidedialog.h
     ${GAME_INCLUDE_DIR}/partyseats.h
     ${GAME_INCLUDE_DIR}/coopreplication.h
     ${GAME_INCLUDE_DIR}/coopsession.h
@@ -730,6 +731,7 @@ set(GAME_SOURCES
     ${GAME_SOURCE_DIR}/coopflows.cpp
     ${GAME_SOURCE_DIR}/coopgame.cpp
     ${GAME_SOURCE_DIR}/coopprompts.cpp
+    ${GAME_SOURCE_DIR}/outsidedialog.cpp
     ${GAME_SOURCE_DIR}/partyseats.cpp
     ${GAME_SOURCE_DIR}/cooploot.cpp
     ${GAME_SOURCE_DIR}/dedicated.cpp

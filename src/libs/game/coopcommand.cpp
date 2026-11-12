@@ -797,6 +797,11 @@ CoopBench coopScriptBench(Game &game, const std::string &script) {
 }
 
 bool coopPersonalConversation(Game &game) {
+    // Fork addition: a conversation driven from outside (outsidedialog.h) is between the host and
+    // the one it talks to. It is not in anyone else's install, so it is never mirrored, and nobody is held.
+    if (game.outsideDialogRunning()) {
+        return true;
+    }
     // K1's Taris workbench talks once (a tutorial) before its OnUsed script opens the upgrade
     // screen: that talk belongs to the player at the bench, like the screen after it.
     auto placeable = std::dynamic_pointer_cast<Placeable>(game.conversationOwner());

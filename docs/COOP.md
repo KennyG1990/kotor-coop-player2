@@ -63,6 +63,40 @@ protocol is unchanged. The rules that need no engine are in `game/partyseats.h`
 (`test/game/partyseats.cpp`); the host's `netstatus` reports `partySeats` (seats taken,
 the seated characters present, and what each portrait shows).
 
+### A seat driven from outside (this fork)
+
+A program beside the game can play a guest seat through the control port, with the same
+commands a person's screens send. The commands below exist for that. Each does nothing
+unless it is called; a person in a seat is unaffected, and none changes the protocol.
+
+Guest (client) console:
+
+- `cooplevelupoptions`: what the controlled character may choose at its next level, as
+  JSON (points, costs, caps, legal feats and powers, the Recommended set).
+- `cooplevelupchoose <choice>`: send a chosen set. `validateCoopLevelUp` on the host is
+  still the only judge; `coopresult <seq>` gives its answer.
+- `coopgear`: what the character wears and carries, and where each item may go.
+
+Host console:
+
+- `coopgive <player> <item>` and `coopbag`: hand a guest an item from the host's
+  inventory; list what can be handed over (Free Mode).
+- `cooptalkable <player> <1|0>`: let that guest be talked to by clicking their
+  character. Off for every guest unless set. A click then counts as a request to talk,
+  reported in `netstatus` (`talkable`, `talkRequests`).
+- `talkopen <object id> <base64 JSON>`, `talkstate`, `talkclose`: a conversation
+  supplied from outside, run on the game's own conversation screen
+  (`game/outsidedialog.h`, `test/game/outsidedialog.cpp`). One exchange is a line for the
+  character to say and the replies the player may pick: a short label each, and the full
+  line the player's character then speaks. A reply may name one of the game's own
+  conversation checks: `check` (the game's script decides, as for a [Persuade] reply:
+  `k_con_perseasy`, `k_con_persmed`, `k_con_pershigh`) or `showIf` (offered only when the
+  script allows, as for [Force Persuade]: `k_con_fperslow`, `k_con_fpershigh`). The rule is
+  the game's; nothing re-implements it. Such a conversation is the host's own, like a
+  workbench's talk: it is not mirrored to guests and nobody is held by it.
+- `conversationstats`: what those checks read from the player's character (Persuade,
+  level, Charisma, Affect Mind, Dominate Mind, alignment).
+
 ## Joining by IP:port
 
 Co-op uses [GameNetworkingSockets](https://github.com/ValveSoftware/GameNetworkingSockets)

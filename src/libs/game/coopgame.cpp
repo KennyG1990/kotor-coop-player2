@@ -22,6 +22,7 @@
 #include "reone/game/d20/spells.h"
 #include "reone/game/coopsession.h"
 #include "reone/game/equipmentrules.h"
+#include "reone/game/outsidedialog.h"
 #include "reone/game/location.h"
 #include "reone/game/action/jumptolocation.h"
 #include "reone/resource/director.h"
@@ -741,6 +742,63 @@ void Game::initCoopConsole() {
             throw std::runtime_error(why);
         }
         _console.printLine("coop gave " + std::string(*args[2]) + " to " + std::string(*args[1]));
+    });
+    // A conversation driven from outside, on the game's own conversation screen (outsidedialog.h).
+    _console.registerCommand("talkopen", "open or continue a conversation driven from outside: talkopen <object id of the one spoken to> <base64 of the JSON exchange>", [this](const ConsoleArgs &args) {
+        auto id = args.get<uint32_t>(1);
+        if (args.size() != 3 || !id) {
+            throw std::runtime_error("Usage: talkopen <object id> <base64 JSON>");
+        }
+        auto owner = getObjectById<Creature>(*id);
+        if (!owner || !owner->isRuntimeLive() || owner->isDead()) {
+            throw std::runtime_error("there is nobody with that id to talk to");
+        }
+        OutsideDialog built;
+        try {
+            built = buildOutsideDialog(parseOutsideDialog(decodeBase64(std::string(*args[2]))), "p2talk");
+        } catch (const std::invalid_argument &e) {
+            throw std::runtime_error(e.what());
+        }
+        auto why = startOutsideDialog(owner, std::move(built));
+        if (!why.empty()) {
+            throw std::runtime_error(why);
+        }
+        _console.printLine(outsideDialogStateJson());
+    });
+    _console.registerCommand("talkstate", "where the conversation driven from outside is, or where the last one ended, as one line of JSON", [this](const ConsoleArgs &) {
+        _console.printLine(outsideDialogStateJson());
+    });
+    _console.registerCommand("talkclose", "end the conversation driven from outside", [this](const ConsoleArgs &) {
+        closeOutsideDialog();
+        _console.printLine(outsideDialogStateJson());
+    });
+    _console.registerCommand("conversationstats", "what the game's conversation checks read from the player's character, as one line of JSON", [this](const ConsoleArgs &) {
+        namespace json = boost::json;
+        auto player = _party.player();
+        if (!player) {
+            throw std::runtime_error("there is no player character");
+        }
+        json::object root;
+        root["tag"] = player->tag();
+        root["name"] = player->name();
+        // The same values the game's scripts read: GetSkillRank, GetHitDice, GetHasSpell.
+        root["persuade"] = player->getSkillValue(SkillType::Persuade);
+        root["level"] = player->attributes().getAggregateLevel();
+        root["charisma"] = player->attributes().getAbilityScore(Ability::Charisma);
+        root["affectMind"] = player->attributes().hasSpell(SpellType::AffectMind);
+        root["dominateMind"] = player->attributes().hasSpell(SpellType::DominateMind);
+        root["alignment"] = player->goodEvil();
+        _console.printLine(json::serialize(root));
+    });
+    _console.registerCommand("cooptalkable", "co-op host: let a guest be talked to by clicking their character: cooptalkable <player name|client id> <1|0>", [this](const ConsoleArgs &args) {
+        auto on = args.get<int>(2);
+        if (args.size() != 3 || !on) {
+            throw std::runtime_error("Usage: cooptalkable <player name|client id> <1|0>");
+        }
+        if (!_coop || !_coop->isHost() || !_coop->hostSetTalkable(std::string(*args[1]), *on != 0)) {
+            throw std::runtime_error("no such player on this host");
+        }
+        _console.printLine(std::string("coop talkable ") + (*on != 0 ? "on" : "off"));
     });
     _console.registerCommand("coopbag", "co-op host: the items in your inventory that coopgive can hand to a guest, as one line of JSON", [this](const ConsoleArgs &) {
         namespace json = boost::json;

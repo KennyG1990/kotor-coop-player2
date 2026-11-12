@@ -1213,6 +1213,32 @@ std::string CoopSession::hostGiveToGuest(const std::string &who, const std::stri
     return "no such player";
 }
 
+bool CoopSession::hostSetTalkable(const std::string &who, bool on) {
+    if (!isHost()) {
+        return false;
+    }
+    for (auto &[connection, client] : _clients) {
+        if (boost::iequals(client.name, who) || std::to_string(client.clientId) == who) {
+            client.talkable = on;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool CoopSession::hostTalkClick(const Creature &creature) {
+    if (!isHost()) {
+        return false;
+    }
+    for (auto &[connection, client] : _clients) {
+        if (client.talkable && client.guestId != 0 && client.guestId == creature.id()) {
+            ++client.talkRequests;
+            return true;
+        }
+    }
+    return false;
+}
+
 bool CoopSession::setGuestCredits(uint32_t clientId, int credits) {
     for (auto &[connection, client] : _clients) {
         auto record = _guests.find(client.name);

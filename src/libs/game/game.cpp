@@ -17,6 +17,8 @@
 
 #include "reone/game/game.h"
 
+#include <boost/json.hpp>
+
 #include "reone/game/autolevel.h"
 #include "reone/input/focus.h"
 
@@ -1438,6 +1440,7 @@ void Game::tick(float dt) {
     _conversationStepPending = false;
     if (_screen == Screen::Conversation && _conversation && !_movie) {
         _conversation->updateSimulation(dt);
+        noteOutsideDialogNode(); // fork addition; does nothing unless a conversation was opened from outside
     }
 
     // Model animation is simulation: creatures and doors wait for their
@@ -6435,6 +6438,8 @@ void Game::startDialog(const std::shared_ptr<Object> &owner, const std::string &
         return;
     }
 
+    // A conversation from the game's own files takes the screen from one driven from outside.
+    _outsideDialog = {};
     _lastConversation = resRef;
     bool computerConversation = dialog->conversationType == ConversationType::Computer;
     auto conversation = computerConversation ? _computer.get() : static_cast<Conversation *>(_dialog.get());
@@ -6456,6 +6461,91 @@ void Game::startDialog(const std::shared_ptr<Object> &owner, const std::string &
     _conversation->setAutoSkip(&_conversationAutoSkip);
     _conversation->start(dialog, owner, std::move(admission));
 }
+
+// BEGIN fork addition: a conversation driven from outside (outsidedialog.h)
+
+std::string Game::startOutsideDialog(const std::shared_ptr<Object> &owner, OutsideDialog built) {
+    if (!built.dialog || !owner) {
+        return "there is nobody to talk to";
+    }
+    if (_movie || _captureHUDPresentation || !_dialog || !_module || !_module->area()) {
+        return "the game is not in play";
+    }
+    bool replacing = outsideDialogRunning();
+    if (!replacing && _screen != Screen::InGame) {
+        return "another screen or conversation is up";
+    }
+    if (_coop && _coop->isClient()) {
+        return "only the host's own game can run a conversation";
+    }
+    auto conversation = static_cast<Conversation *>(_dialog.get());
+    if (!replacing) {
+        endStealthForConversation();
+        stopMovement();
+        setRelativeMouseMode(false);
+        setCursorType(CursorType::Default);
+        changeScreen(Screen::Conversation);
+    }
+    _outsideDialog = std::move(built);
+    _outsideNode = {};
+    _outsideEntry = -1;
+    ++_outsideOpened;
+    _lastConversation = _outsideDialog.dialog->resRef;
+    _conversation = conversation;
+    // The auto-skip seam replays recorded picks through the game's own dialogs. A conversation
+    // from outside has no recorded picks: the player reads and chooses.
+    _conversation->setAutoSkip(nullptr);
+    _conversation->start(_outsideDialog.dialog, owner);
+    noteOutsideDialogNode();
+    return "";
+}
+
+bool Game::outsideDialogRunning() const {
+    return _outsideDialog.dialog && _screen == Screen::Conversation && _conversation && _conversation->isRunning() &&
+           _conversation->inspectionState().dialog == _outsideDialog.dialog;
+}
+
+void Game::closeOutsideDialog() {
+    if (outsideDialogRunning()) {
+        _conversation->abort();
+    }
+}
+
+void Game::noteOutsideDialogNode() {
+    if (!outsideDialogRunning()) {
+        return;
+    }
+    auto state = _conversation->inspectionState();
+    const auto &entries = _outsideDialog.dialog->entries;
+    if (!state.entry || entries.empty() || state.entry < entries.data() || state.entry >= entries.data() + entries.size()) {
+        return;
+    }
+    int index = static_cast<int>(state.entry - entries.data());
+    if (index != _outsideEntry && index < static_cast<int>(_outsideDialog.nodes.size())) {
+        _outsideEntry = index;
+        _outsideNode = _outsideDialog.nodes[index];
+    }
+}
+
+std::string Game::outsideDialogStateJson() const {
+    boost::json::object root;
+    bool running = outsideDialogRunning();
+    root["running"] = running;
+    root["opened"] = _outsideOpened; // counts every exchange opened, so a new one is told from the last
+    root["node"] = outsideDialogKindName(_outsideNode.kind); // the node it is on, or the one it ended on
+    root["option"] = _outsideNode.option;
+    root["checked"] = _outsideNode.checked;
+    root["passed"] = _outsideNode.passed;
+    root["ends"] = _outsideNode.end;
+    if (running) {
+        auto state = _conversation->inspectionState();
+        root["entryEnded"] = state.entryEnded;
+        root["choosing"] = _outsideNode.kind == OutsideDialogNode::Kind::Line && state.entryEnded;
+    }
+    return boost::json::serialize(root);
+}
+
+// END fork addition
 
 void Game::resumeConversation() {
     if (!_conversation || !isConversationActive()) {

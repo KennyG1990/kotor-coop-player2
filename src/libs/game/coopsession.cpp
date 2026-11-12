@@ -3442,6 +3442,8 @@ json::object CoopSession::statusJson() const {
                 json::object guest;
                 auto record = _guests.find(client.name);
                 guest["id"] = client.guestId;
+                guest["talkable"] = client.talkable;
+                guest["talkRequests"] = client.talkRequests;
                 guest["store"] = client.storeOpen;
                 guest["bench"] = client.benchOpen;
                 if (record != _guests.end()) {

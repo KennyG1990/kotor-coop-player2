@@ -2008,6 +2008,7 @@ private:
     void consoleShowImGui(const ConsoleArgs &tokens);
     void consoleShowPath(const ConsoleArgs &tokens);
     void consoleDumpState(const ConsoleArgs &tokens);
+    void consoleCompanionState(const ConsoleArgs &tokens);
     void consoleTickGate(const ConsoleArgs &tokens);
     void consoleStep(const ConsoleArgs &tokens);
     void consoleStepIdle(const ConsoleArgs &tokens);

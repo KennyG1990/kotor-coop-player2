@@ -19,8 +19,14 @@ Forked on 2026-11-11 from McChaffeeFAF/kotor-coop at tag `v0.5.2`
 
 - The `main` branch is an unmodified copy of upstream at the commit above.
 - Work specific to this fork is on the `develop` branch. Its commit history is the
-  record of what was changed and when. As of 2026-11-11 the only change is this notice
-  and the note at the top of the README.
+  record of what was changed and when. Changes so far:
+  - 2026-11-11: this notice and the note at the top of the README.
+  - 2026-11-11: party seats, a host option (`--coop-party-seats`) that shows a Free Mode
+    guest's character in the party portraits and counts it on the party selection
+    screen (`docs/COOP.md`, "Party seats").
+  - 2026-11-11: `companionstate`, a read-only console command reporting the campaign's
+    played seconds and the names the game shows for the current module and area. Kept
+    out of `dumpstate`, whose output the determinism test hashes.
 
 Existing copyright headers in source files are kept. Third-party code under `extern/`
 keeps its own licences.

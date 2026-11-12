@@ -799,6 +799,7 @@ void Game::initConsole() {
     registerConsoleCommand("showpath", "show debug overlay for pathfinding", &Game::consoleShowPath);
     registerConsoleCommand("dumpstate", "print the game state as one line of JSON: dumpstate [radius]", &Game::consoleDumpState);
     registerConsoleCommand("dumpobject", "print one object as one line of JSON: dumpobject <id|tag>", &Game::consoleDumpObject);
+    registerConsoleCommand("companionstate", "print what a companion's memory needs as one line of JSON: played seconds and the names of the module and area", &Game::consoleCompanionState);
     registerConsoleCommand("newgame", "start a quick new game: newgame [class slot 0-5] [name]", &Game::consoleNewGame);
     registerConsoleCommand("moveto", "walk a creature to a point through the pathfinder: moveto x y [z] [run=1] [@id|tag]", &Game::consoleMoveTo);
     registerConsoleCommand("movetoobject", "walk a creature to an object through the pathfinder: movetoobject id|tag [run=1] [distance] [@id|tag]", &Game::consoleMoveToObject);

@@ -809,6 +809,25 @@ std::string Game::dumpStateJson(float radius) const {
     return toCompactString(root);
 }
 
+void Game::consoleCompanionState(const ConsoleArgs &args) {
+    // What a companion's memory of the journey needs and dumpstate does not
+    // carry (fork addition). Read-only, one line of JSON. Kept out of
+    // dumpstate on purpose: the determinism test hashes that dump.
+    if (args.size() > 1) {
+        throw std::runtime_error("Usage: companionstate");
+    }
+    std::shared_ptr<Area> area = _module ? _module->area() : nullptr;
+    json::object root;
+    // Seconds this campaign has been played, as the save file keeps it. It
+    // goes back when an earlier save is loaded.
+    root["playedSeconds"] = _party.persistedState().playedSeconds;
+    root["module"] = _module ? json::value(_module->name()) : json::value(nullptr);
+    // The names the game shows the player for where the party is.
+    root["moduleName"] = _module ? json::value(_module->localizedName()) : json::value(nullptr);
+    root["areaName"] = area ? json::value(area->localizedName()) : json::value(nullptr);
+    _console.printLine(json::serialize(root));
+}
+
 void Game::consoleDumpState(const ConsoleArgs &args) {
     if (args.size() > 2) {
         throw std::runtime_error("Usage: dumpstate [radius]");

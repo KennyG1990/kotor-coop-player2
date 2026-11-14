@@ -1008,6 +1008,32 @@ void CoopSession::hostRetireToken(uint64_t token) {
     _rejoinTokenOrder.erase(std::remove(_rejoinTokenOrder.begin(), _rejoinTokenOrder.end(), token), _rejoinTokenOrder.end());
 }
 
+bool CoopSession::hostForgetAbsentGuest(const std::string &name) {
+    // Fork addition, called only by the coopforgetguest command: let go of
+    // the record kept for a guest who is not connected, with the tokens the
+    // name was held by, so that whoever joins under that name next brings
+    // their own character. A connected guest is never touched.
+    bool here = std::any_of(_clients.begin(), _clients.end(), [&](const auto &entry) {
+        return entry.second.welcomed && entry.second.name == name;
+    });
+    if (here) {
+        return false;
+    }
+    std::vector<uint64_t> tokens;
+    for (const auto &[issued, owned] : _rejoinTokens) {
+        if (owned.name == name) {
+            tokens.push_back(issued);
+        }
+    }
+    bool known = _guests.count(name) > 0 || !tokens.empty();
+    for (auto token : tokens) {
+        hostRetireToken(token);
+    }
+    hostRetireGuest(name, true);
+    _reservations.erase(name);
+    return known;
+}
+
 void CoopSession::hostRetireGuest(const std::string &name, bool loot) {
     _guests.erase(name);
     _guestOwners.erase(name);

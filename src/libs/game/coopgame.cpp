@@ -323,6 +323,16 @@ void Game::initCoopConsole() {
         code["error"] = online.error;
         _console.printLine(compact(code));
     });
+    _console.registerCommand("coopforgetguest", "co-op host: let go of the record kept for a guest who is not connected, so the next join under that name brings its own character: coopforgetguest <name>", [this](const ConsoleArgs &args) {
+        if (!_coop || !_coop->isHost()) {
+            throw std::runtime_error("not a co-op host");
+        }
+        if (args.size() != 2) {
+            throw std::runtime_error("Usage: coopforgetguest <name>");
+        }
+        _console.printLine(_coop->hostForgetAbsentGuest(std::string(args[1].value())) ? "coop guest record forgotten"
+                                                                                       : "coop guest record not forgotten: connected, or none kept");
+    });
     _console.registerCommand("coopreissue", "co-op host: a new join code (the old one stops working)", [this](const ConsoleArgs &) {
         if (!_coop || !_coop->isHost()) {
             throw std::runtime_error("not a co-op host");

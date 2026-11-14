@@ -821,6 +821,9 @@ void Game::consoleCompanionState(const ConsoleArgs &args) {
     // Seconds this campaign has been played, as the save file keeps it. It
     // goes back when an earlier save is loaded.
     root["playedSeconds"] = _party.persistedState().playedSeconds;
+    // The mark the companion program set with companiontag, as the loaded save
+    // carried it. Empty when none was ever set.
+    root["tag"] = _party.persistedState().companionTag;
     root["module"] = _module ? json::value(_module->name()) : json::value(nullptr);
     // The names the game shows the player for where the party is.
     root["moduleName"] = _module ? json::value(_module->localizedName()) : json::value(nullptr);
@@ -846,6 +849,31 @@ void Game::consoleCompanionState(const ConsoleArgs &args) {
     dialog["lines"] = std::move(lines);
     root["dialog"] = std::move(dialog);
     _console.printLine(json::serialize(root));
+}
+
+void Game::consoleCompanionTag(const ConsoleArgs &args) {
+    // Fork addition: a short mark that an outside companion program keeps in
+    // the party table of every save made from now on, and reads back with
+    // companionstate, so that a save loaded says which point of which journey
+    // it was made at. Nothing sets it unless this command is called, and an
+    // empty mark writes no field at all, so saves stay exactly as they were.
+    if (args.size() > 2) {
+        throw std::runtime_error("Usage: companiontag [mark]");
+    }
+    if (args.size() == 2) {
+        std::string mark(args[1].value());
+        bool ok = !mark.empty() && mark.size() <= 48 &&
+                  std::all_of(mark.begin(), mark.end(), [](unsigned char c) {
+                      return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '.' || c == '-' || c == '_';
+                  });
+        if (!ok) {
+            throw std::runtime_error("companiontag: a mark is 1 to 48 letters, digits, dots, dashes or underscores");
+        }
+        auto state = _party.persistedState();
+        state.companionTag = std::move(mark);
+        _party.setPersistedState(std::move(state));
+    }
+    _console.printLine("companiontag " + _party.persistedState().companionTag);
 }
 
 void Game::consoleDumpState(const ConsoleArgs &args) {

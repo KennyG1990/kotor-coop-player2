@@ -802,6 +802,7 @@ void Game::initConsole() {
     registerConsoleCommand("dumpstate", "print the game state as one line of JSON: dumpstate [radius]", &Game::consoleDumpState);
     registerConsoleCommand("dumpobject", "print one object as one line of JSON: dumpobject <id|tag>", &Game::consoleDumpObject);
     registerConsoleCommand("companionstate", "print what a companion's memory needs as one line of JSON: played seconds and the names of the module and area", &Game::consoleCompanionState);
+    registerConsoleCommand("companiontag", "set or print the mark a companion program keeps in saves made from now on: companiontag [mark]", &Game::consoleCompanionTag);
     registerConsoleCommand("newgame", "start a quick new game: newgame [class slot 0-5] [name]", &Game::consoleNewGame);
     registerConsoleCommand("moveto", "walk a creature to a point through the pathfinder: moveto x y [z] [run=1] [@id|tag]", &Game::consoleMoveTo);
     registerConsoleCommand("movetoobject", "walk a creature to an object through the pathfinder: movetoobject id|tag [run=1] [distance] [@id|tag]", &Game::consoleMoveToObject);
@@ -2804,6 +2805,7 @@ Party::PersistedState Game::parsePartyTable(const resource::Gff &ptGff) const {
     state.swoopUpgrades[1] = ptGff.getUint("PT_SWOOP2");
     state.swoopUpgrades[2] = ptGff.getUint("PT_SWOOP3");
     state.playedSeconds = ptGff.getUint("PT_PLAYEDSECONDS");
+    state.companionTag = ptGff.getString("PT_COMPANION_TAG");
     uint32_t playedMinutes = ptGff.getUint("PT_PLAYEDMINUTES");
     if (playedMinutes != 0) {
         state.playedSeconds = playedMinutes * 60;

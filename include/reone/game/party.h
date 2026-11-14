@@ -98,6 +98,9 @@ public:
         uint32_t itemChemical {0};
         std::array<uint32_t, 3> swoopUpgrades {};
         uint32_t playedSeconds {0};
+        // Fork addition: a short mark an outside companion program keeps in
+        // the save (companiontag). Empty: none, and nothing is written.
+        std::string companionTag;
         int controlledNpc {-1};
         bool soloMode {false};
         std::vector<int> memberIds;

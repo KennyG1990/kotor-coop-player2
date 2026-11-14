@@ -274,6 +274,9 @@ public:
     net::OnlineStatus onlineStatus() const;
     /** Host: a new join code; the old one stops working. */
     void reissueCode();
+    // Fork addition (coopforgetguest): let go of the record kept for a guest
+    // who is not connected. True when there was one.
+    bool hostForgetAbsentGuest(const std::string &name);
 
     /** Client: where joining stands, for the Connecting... screen. */
     enum class JoinProgress {

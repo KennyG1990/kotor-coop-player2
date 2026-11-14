@@ -262,6 +262,12 @@ std::shared_ptr<Gff> SaveWideSnapshotBuilder::buildPartyTable() const {
         removeSaveField(*result, "PT_COST_MULT_LIST");
     }
     put(*result, Gff::Field::newDword("PT_PLAYEDSECONDS", state.playedSeconds));
+    // Fork addition: the companion program's mark, only when one was set.
+    if (!state.companionTag.empty()) {
+        put(*result, Gff::Field::newCExoString("PT_COMPANION_TAG", state.companionTag));
+    } else {
+        removeSaveField(*result, "PT_COMPANION_TAG");
+    }
     put(*result, Gff::Field::newInt("PT_CONTROLLED_NP", state.controlledNpc));
     put(*result, Gff::Field::newByte("PT_SOLOMODE", party.isSoloMode()));
     put(*result, Gff::Field::newByte("PT_CHEAT_USED", _metadata.cheatUsed));

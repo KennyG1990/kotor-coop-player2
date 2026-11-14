@@ -167,8 +167,12 @@ public:
     void setTiming(double showSeconds, double secondsPerCharacter);
     double showSeconds() const { return _showSeconds; }
     double secondsPerCharacter() const { return _secondsPerCharacter; }
+    /** How large the chat and its input line are drawn, as a multiple of their usual size. Clamped. */
+    void setTextScale(double scale) { _textScale = scale < 1.0 ? 1.0 : (scale > 4.0 ? 4.0 : scale); }
+    double textScale() const { return _textScale; }
 
 private:
+    double _textScale {1.0};
     double _showSeconds {kShowSeconds};
     double _secondsPerCharacter {0.0};
     std::deque<ChatLine> _lines;

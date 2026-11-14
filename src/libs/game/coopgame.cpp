@@ -778,6 +778,14 @@ void Game::initCoopConsole() {
         _coop->chatLog().setTiming(*seconds, *each);
         _console.printLine("coopchattime show=" + std::to_string(_coop->chatLog().showSeconds()) + " perCharacter=" + std::to_string(_coop->chatLog().secondsPerCharacter()));
     });
+    _console.registerCommand("coopchatsize", "co-op: how large the chat is drawn on this screen, as a multiple of its usual size: coopchatsize <1 to 4>", [this](const ConsoleArgs &args) {
+        auto scale = args.get<float>(1);
+        if (!_coop || args.size() != 2 || !scale) {
+            throw std::runtime_error("Usage: coopchatsize <1 to 4> (in a co-op session)");
+        }
+        _coop->chatLog().setTextScale(*scale);
+        _console.printLine("coopchatsize " + std::to_string(_coop->chatLog().textScale()));
+    });
     _console.registerCommand("talkstate", "where the conversation driven from outside is, or where the last one ended, as one line of JSON", [this](const ConsoleArgs &) {
         _console.printLine(outsideDialogStateJson());
     });

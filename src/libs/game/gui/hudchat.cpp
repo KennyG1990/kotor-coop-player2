@@ -100,7 +100,9 @@ void HUD::renderCoopChat() {
         return;
     }
     auto &font = *_guestListFont;
-    float scale = std::min(options.width / 800.0f, options.height / 600.0f) * options.guiScale * options.guiTextScale;
+    // Larger only when asked (coopchatsize): the chat is drawn at about a third of the size of the game's own text.
+    float asked = static_cast<float>(coop->chatLog().textScale());
+    float scale = std::min(options.width / 800.0f, options.height / 600.0f) * options.guiScale * options.guiTextScale * asked;
     float lineHeight = font.height() * scale * 1.2f;
     float pad = 6.0f * scale;
     float left = 12.0f * scale;
@@ -162,7 +164,11 @@ void HUD::renderCoopChat() {
             std::string prompt = "Say: ";
             std::string text = input.text() + "_";
             float width = std::max(360.0f * scale, font.measure(prompt + text, scale) + 2.0f * pad);
-            drawRect(_services, {left - pad, y - lineHeight}, {width, lineHeight}, glm::vec4(0.0f, 0.0f, 0.0f, 0.65f));
+            drawRect(_services, {left - pad, y - lineHeight}, {width, lineHeight}, glm::vec4(0.0f, 0.0f, 0.0f, asked > 1.0f ? 0.85f : 0.65f));
+            if (asked > 1.0f) {
+                // And a line under it, so that the place to type is seen at once.
+                drawRect(_services, {left - pad, y - 1.5f * scale}, {width, 1.5f * scale}, glm::vec4(0.75f, 0.85f, 1.0f, 1.0f));
+            }
             float baseline = y - lineHeight * 0.5f;
             font.render(prompt, glm::vec3(left, baseline, 0.0f), glm::vec4(0.75f, 0.85f, 1.0f, 1.0f), TextGravity::RightCenter, scale);
             font.render(text, glm::vec3(left + font.measure(prompt, scale), baseline, 0.0f), glm::vec4(1.0f), TextGravity::RightCenter, scale);

@@ -760,11 +760,23 @@ void Game::initCoopConsole() {
         } catch (const std::invalid_argument &e) {
             throw std::runtime_error(e.what());
         }
+        float mouth = built.mouthSpeed;
         auto why = startOutsideDialog(owner, std::move(built));
         if (!why.empty()) {
             throw std::runtime_error(why);
         }
+        owner->setSilentTalkSpeed(mouth); // only what the outside program asked; 1 otherwise
         _console.printLine(outsideDialogStateJson());
+    });
+    // How long a chat line stays on this screen. Nothing changes until it is called.
+    _console.registerCommand("coopchattime", "co-op: how long a chat line shows on this screen: coopchattime <seconds> [more seconds per character]", [this](const ConsoleArgs &args) {
+        auto seconds = args.get<float>(1);
+        auto each = args.size() > 2 ? args.get<float>(2) : std::optional<float>(0.0f);
+        if (!_coop || args.size() < 2 || args.size() > 3 || !seconds || !each) {
+            throw std::runtime_error("Usage: coopchattime <seconds> [more seconds per character] (in a co-op session)");
+        }
+        _coop->chatLog().setTiming(*seconds, *each);
+        _console.printLine("coopchattime show=" + std::to_string(_coop->chatLog().showSeconds()) + " perCharacter=" + std::to_string(_coop->chatLog().secondsPerCharacter()));
     });
     _console.registerCommand("talkstate", "where the conversation driven from outside is, or where the last one ended, as one line of JSON", [this](const ConsoleArgs &) {
         _console.printLine(outsideDialogStateJson());

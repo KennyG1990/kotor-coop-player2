@@ -104,6 +104,13 @@ OutsideDialogSpec parseOutsideDialog(const std::string &json) {
     if (auto hold = object.if_contains("hold"); hold && hold->is_number()) {
         spec.holdSeconds = std::clamp(static_cast<int>(hold->to_number<double>()), 5, 120);
     }
+    // Both are the outside program's to ask for; left out, the line is timed and spoken as it always was.
+    if (auto read = object.if_contains("read"); read && read->is_number()) {
+        spec.readSeconds = std::clamp(static_cast<int>(read->to_number<double>()), 2, 90);
+    }
+    if (auto mouth = object.if_contains("mouth"); mouth && mouth->is_number()) {
+        spec.mouthSpeed = std::clamp(static_cast<float>(mouth->to_number<double>()), 0.1f, 1.0f);
+    }
     auto options = object.if_contains("options");
     if (!options || !options->is_array() || options->as_array().empty()) {
         throw std::invalid_argument("options are missing");
@@ -143,7 +150,8 @@ OutsideDialog buildOutsideDialog(const OutsideDialogSpec &spec, const std::strin
     // dialogs order them: the first entry whose condition holds is the one that plays).
     Dialog::EntryReply first;
     first.text = spec.line;
-    first.delay = readingSeconds(spec.line);
+    first.delay = spec.readSeconds > 0 ? spec.readSeconds : readingSeconds(spec.line);
+    built.mouthSpeed = spec.mouthSpeed;
     Dialog::EntryReply waiting;
     waiting.text = spec.waiting;
     waiting.delay = spec.holdSeconds;

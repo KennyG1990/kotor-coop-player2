@@ -1505,8 +1505,9 @@ void Creature::syncTalkLayer(ModelSceneNode &model) {
             if (_talkLayerOn) {
                 model.fadeOutLayer(talkAnim->name(), true);
             }
-            model.playAnimation(*talkAnim, _lipAnimation,
-                                AnimationProperties::fromFlags(AnimationFlags::loopOverlay | AnimationFlags::layer | AnimationFlags::propagate));
+            auto talkProperties = AnimationProperties::fromFlags(AnimationFlags::loopOverlay | AnimationFlags::layer | AnimationFlags::propagate);
+            talkProperties.speed = _lipAnimation ? 1.0f : _silentTalkSpeed;
+            model.playAnimation(*talkAnim, _lipAnimation, std::move(talkProperties));
             _talkLayerOn = true;
             _talkLayerLip = _lipAnimation;
         }
@@ -1608,7 +1609,9 @@ void Creature::updateModelAnimation() {
             bodyProperties.speed = gaitPlaybackRate(walkSpeed(), anim->length(), _walkSpeed);
         }
         model->playAnimation(*anim, nullptr, std::move(bodyProperties));
-        model->playAnimation(*talkAnim, _lipAnimation, AnimationProperties::fromFlags(AnimationFlags::loopOverlay | AnimationFlags::propagate));
+        auto talkProperties = AnimationProperties::fromFlags(AnimationFlags::loopOverlay | AnimationFlags::propagate);
+        talkProperties.speed = _lipAnimation ? 1.0f : _silentTalkSpeed;
+        model->playAnimation(*talkAnim, _lipAnimation, std::move(talkProperties));
     } else {
         if (anim) {
             // The corpse pose is a short clip; looping/blending it makes the
@@ -1630,7 +1633,9 @@ void Creature::updateModelAnimation() {
         }
 
         if (talkAnim) {
-            model->playAnimation(*talkAnim, _lipAnimation, AnimationProperties::fromFlags(AnimationFlags::loopBlend | AnimationFlags::propagate));
+            auto talkProperties = AnimationProperties::fromFlags(AnimationFlags::loopBlend | AnimationFlags::propagate);
+            talkProperties.speed = _lipAnimation ? 1.0f : _silentTalkSpeed;
+            model->playAnimation(*talkAnim, _lipAnimation, std::move(talkProperties));
         }
     }
 

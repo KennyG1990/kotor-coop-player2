@@ -160,8 +160,17 @@ public:
     size_t offset() const { return _offset; }
 
     static float alphaFor(double age);
+    /** As above, for a line shown for the given time before it fades. */
+    static float alphaFor(double age, double showSeconds);
+
+    /** How long a line shows before it fades: seconds, and more for each character of it. Clamped. */
+    void setTiming(double showSeconds, double secondsPerCharacter);
+    double showSeconds() const { return _showSeconds; }
+    double secondsPerCharacter() const { return _secondsPerCharacter; }
 
 private:
+    double _showSeconds {kShowSeconds};
+    double _secondsPerCharacter {0.0};
     std::deque<ChatLine> _lines;
     bool _open {false};
     size_t _offset {0};

@@ -615,6 +615,15 @@ public:
      */
     bool autoCombat() const { return _autoCombat; }
     void setAutoCombat(bool autoCombat) { _autoCombat = autoCombat; }
+    /** How fast the mouth moves on a line with no voice (1: as the game plays it). */
+    void setSilentTalkSpeed(float speed) {
+        speed = speed < 0.1f ? 0.1f : (speed > 1.0f ? 1.0f : speed);
+        if (speed != _silentTalkSpeed) {
+            _silentTalkSpeed = speed;
+            _talkLayerOn = false; // the loop is started again at the new speed
+            _animDirty = true;
+        }
+    }
     // Stealth Mode (design note stealth)
 
     /** In Stealth Mode: hostile observers notice it only by an Awareness check. */
@@ -1177,6 +1186,7 @@ private:
     bool _animDirty {true};
     bool _animFireForget {false};
     bool _talkLayerOn {false};
+    float _silentTalkSpeed {1.0f};
     std::shared_ptr<graphics::LipAnimation> _talkLayerLip;
     std::shared_ptr<graphics::LipAnimation> _lipAnimation;
 

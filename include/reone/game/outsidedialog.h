@@ -51,6 +51,8 @@ struct OutsideDialogSpec {
     std::string playerTag;  // tag of the player's character, so their lines are theirs on screen; may be empty
     std::string waiting {"..."}; // shown while the outside program prepares the answer
     int holdSeconds {45};   // how long the waiting node holds the screen
+    int readSeconds {0};    // how long the owner's line holds before the options; 0: by its length, as before
+    float mouthSpeed {1.0f}; // how fast the owner's mouth moves on a line with no voice; 1: as the game plays it
     std::vector<OutsideDialogOption> options;
 };
 
@@ -72,6 +74,7 @@ struct OutsideDialogNode {
 struct OutsideDialog {
     std::shared_ptr<resource::Dialog> dialog;
     std::vector<OutsideDialogNode> nodes; // by entry index
+    float mouthSpeed {1.0f};              // as the outside program asked; 1 when it did not
 };
 
 /** Limits of what is accepted, so a broken sender cannot flood the screen. */
@@ -81,7 +84,7 @@ constexpr size_t kOutsideDialogMaxLabel = 120;
 
 /**
  * Parses the JSON an outside program sends:
- * {"line": "...", "playerTag": "...", "waiting": "...", "hold": 45,
+ * {"line": "...", "playerTag": "...", "waiting": "...", "hold": 45, "read": 20, "mouth": 0.5,
  *  "options": [{"label": "...", "line": "...", "check": "k_con_persmed",
  *               "showIf": "k_con_fperslow", "end": false}, ...]}
  * Throws std::invalid_argument with a plain reason.

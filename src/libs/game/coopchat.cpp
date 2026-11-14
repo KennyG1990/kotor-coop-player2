@@ -172,11 +172,20 @@ ChatColour chatColour(uint8_t index) {
 // Chat log
 
 float ChatLog::alphaFor(double age) {
-    if (age < kShowSeconds) {
+    return alphaFor(age, kShowSeconds);
+}
+
+float ChatLog::alphaFor(double age, double showSeconds) {
+    if (age < showSeconds) {
         return 1.0f;
     }
-    double t = (age - kShowSeconds) / kFadeSeconds;
+    double t = (age - showSeconds) / kFadeSeconds;
     return t >= 1.0 ? 0.0f : static_cast<float>(1.0 - t);
+}
+
+void ChatLog::setTiming(double showSeconds, double secondsPerCharacter) {
+    _showSeconds = std::clamp(showSeconds, 2.0, 120.0);
+    _secondsPerCharacter = std::clamp(secondsPerCharacter, 0.0, 1.0);
 }
 
 void ChatLog::add(ChatLine line) {
@@ -222,7 +231,7 @@ std::vector<ChatShown> ChatLog::visible(double now) const {
         return out;
     }
     for (const auto &line : _lines) {
-        float alpha = alphaFor(now - line.time);
+        float alpha = alphaFor(now - line.time, _showSeconds + _secondsPerCharacter * static_cast<double>(line.text.size()));
         if (alpha > 0.0f) {
             out.push_back({&line, alpha});
         }

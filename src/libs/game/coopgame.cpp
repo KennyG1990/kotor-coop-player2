@@ -968,9 +968,23 @@ void Game::initCoopConsole() {
                 kinds.push_back(std::move(entry));
             }
         }
+        json::array powers;
+        for (int i = 0; i < 512; ++i) {
+            auto spell = _services.game.spells.get(static_cast<SpellType>(i));
+            if (!spell || spell->name.empty() || !boost::istarts_with(spell->label, "FORCE_POWER")) {
+                continue;
+            }
+            json::object entry;
+            entry["id"] = i;
+            entry["name"] = spell->name;
+            entry["side"] = spell->goodEvil == 'G' ? "light" : spell->goodEvil == 'E' ? "dark" : "";
+            entry["hostile"] = spell->hostile;
+            powers.push_back(std::move(entry));
+        }
         json::object root;
         root["feats"] = std::move(feats);
         root["kinds"] = std::move(kinds);
+        root["powers"] = std::move(powers);
         // The rules' own names: the feat line that is for a weapon in each hand, the one that is for a single
         // weapon with the other hand empty, and how a weapon is held (a double blade counts as two; a rifle or
         // a heavy weapon takes both hands).

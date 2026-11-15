@@ -813,7 +813,8 @@ void Game::initConsole() {
     registerConsoleCommand("cancelcombat", "Cancel Combat as the HUD button does: cancelcombat [@id|tag]", &Game::consoleCancelCombat);
     registerConsoleCommand("stealth", "enter or leave Stealth Mode as the Stealth key does (solo mode is turned on as if the player said yes): stealth [1|0] [@id|tag]", &Game::consoleStealth);
     registerConsoleCommand("autocombat", "toggle or set a character's auto-combat: autocombat [1|0] [@id|tag]", &Game::consoleAutoCombat);
-    registerConsoleCommand("brainholds", "what the companion brain holds back for one creature: brainholds <id|tag> [mask]; 0 nothing (the default), add 1 attack feats, 2 Force powers, 4 grenades, 8 healing items, 16 other items", &Game::consoleBrainHolds);
+    registerConsoleCommand("brainholds", "what the companion brain holds back for one creature: brainholds <id|tag> [mask]; 0 nothing (the default), add 1 attack feats, 2 Force powers, 4 grenades, 8 healing items, 16 other items, 32 dark side powers, 64 light side powers", &Game::consoleBrainHolds);
+    registerConsoleCommand("grantall", "test seam: give one creature every Force power and feat the game names, every skill at a rank, and a Force pool: grantall <id|tag> [skill rank] [force points]", &Game::consoleGrantAll);
     registerConsoleCommand("waitidle", "hold command execution until a creature's action queue is empty; prints nothing: waitidle [@id|tag] [maxframes=600]", &Game::consoleWaitIdle);
     registerConsoleCommand("idlestatus", "print whether a creature's action queue is empty: idlestatus [@id|tag]", &Game::consoleIdleStatus);
     registerConsoleCommand("closescreen", "close a container or in-game menu as its Close button does", &Game::consoleCloseScreen);

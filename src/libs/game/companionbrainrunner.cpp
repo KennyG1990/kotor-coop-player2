@@ -285,12 +285,18 @@ void collectTalents(CompanionView &view, Game &game, const Creature &creature, S
     }
     // What is held back for this creature (console brainholds; nothing unless it was called).
     if (uint32_t holds = creature.brainHolds()) {
-        auto held = [holds](const Talent &talent) {
+        auto held = [holds, &spells](const Talent &talent) {
             if (talent.role == TalentRole::AttackFeat) {
                 return (holds & 1u) != 0;
             }
             if (talent.item == 0) {
-                return (holds & 2u) != 0; // a Force power they know
+                if ((holds & 2u) != 0) {
+                    return true; // a Force power they know
+                }
+                // 32: powers of the dark side, 64: powers of the light side (spells.2da goodevil)
+                auto spell = talent.type == TalentType::Spell ? spells.get(static_cast<SpellType>(talent.id)) : nullptr;
+                char side = spell ? spell->goodEvil : 0;
+                return (side == 'E' && (holds & 32u) != 0) || (side == 'G' && (holds & 64u) != 0);
             }
             if (talent.role == TalentRole::Grenade) {
                 return (holds & 4u) != 0;

@@ -532,7 +532,7 @@ void Game::consoleBrainHolds(const ConsoleArgs &args) {
     HarnessArgs parsed(args);
     parsed.requireKnown({});
     if (parsed.positional.empty() || parsed.positional.size() > 2 || parsed.actor) {
-        throw std::runtime_error("Usage: brainholds <id|tag> [mask 0-31]");
+        throw std::runtime_error("Usage: brainholds <id|tag> [mask 0-127]");
     }
     auto creature = std::dynamic_pointer_cast<Creature>(findConsoleObject(parsed.positional[0]));
     if (!creature) {
@@ -540,12 +540,49 @@ void Game::consoleBrainHolds(const ConsoleArgs &args) {
     }
     if (parsed.positional.size() == 2) {
         int mask = std::stoi(std::string(parsed.positional[1]));
-        if (mask < 0 || mask > 31) {
-            throw std::runtime_error("brainholds: the mask is 0 to 31");
+        if (mask < 0 || mask > 127) {
+            throw std::runtime_error("brainholds: the mask is 0 to 127");
         }
         creature->setBrainHolds(static_cast<uint32_t>(mask));
     }
     _console.printLine(str(boost::format("brainholds id=%u tag=%s holds=%u") % creature->id() % creature->tag() % creature->brainHolds()));
+}
+
+// A test seam, nothing unless called: one creature is given everything there is to fight with, so that what a
+// companion chooses to use can be seen with every choice open to it.
+void Game::consoleGrantAll(const ConsoleArgs &args) {
+    HarnessArgs parsed(args);
+    parsed.requireKnown({});
+    if (parsed.positional.empty() || parsed.positional.size() > 3 || parsed.actor) {
+        throw std::runtime_error("Usage: grantall <id|tag> [skill rank] [force points]");
+    }
+    auto creature = std::dynamic_pointer_cast<Creature>(findConsoleObject(parsed.positional[0]));
+    if (!creature) {
+        throw std::runtime_error("grantall: that is not a creature");
+    }
+    int rank = parsed.positional.size() > 1 ? std::stoi(std::string(parsed.positional[1])) : 20;
+    int force = parsed.positional.size() > 2 ? std::stoi(std::string(parsed.positional[2])) : 200;
+    auto &attrs = creature->attributes();
+    int powers = 0, feats = 0;
+    for (int i = 0; i < 512; ++i) {
+        auto spell = _services.game.spells.get(static_cast<SpellType>(i));
+        if (spell && !spell->name.empty() && boost::istarts_with(spell->label, "FORCE_POWER")) {
+            attrs.addSpell(static_cast<SpellType>(i));
+            ++powers;
+        }
+        auto feat = _services.game.feats.get(static_cast<FeatType>(i));
+        if (feat && !feat->name.empty()) {
+            attrs.addFeat(static_cast<FeatType>(i));
+            ++feats;
+        }
+    }
+    for (int skill = 0; skill < 8; ++skill) {
+        attrs.setSkillRank(static_cast<SkillType>(skill), rank);
+    }
+    creature->recalculatePermanentVitality();
+    creature->addBaseForcePoints(force);
+    creature->setCurrentForcePoints(creature->maxForcePoints());
+    _console.printLine(str(boost::format("grantall id=%u powers=%d feats=%d skills=%d force=%d") % creature->id() % powers % feats % rank % creature->maxForcePoints()));
 }
 
 void Game::consoleAutoCombat(const ConsoleArgs &args) {

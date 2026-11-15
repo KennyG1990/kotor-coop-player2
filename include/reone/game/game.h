@@ -2085,6 +2085,7 @@ private:
     void consoleInstantDoors(const ConsoleArgs &tokens);
     void consoleAutoCombat(const ConsoleArgs &tokens);
     void consoleBrainHolds(const ConsoleArgs &tokens);
+    void consoleGrantAll(const ConsoleArgs &tokens);
     void consoleStealth(const ConsoleArgs &tokens);
     void consoleWaitIdle(const ConsoleArgs &tokens);
     void consoleIdleStatus(const ConsoleArgs &tokens);

@@ -1176,6 +1176,25 @@ bool CoopSession::clientPickReply(int row) {
     return true;
 }
 
+namespace {
+
+// One item from a stack is handed over, not the whole stack (fork addition, 2026-11-15: a companion carrying two
+// pistols said it would keep one, and both went). A stack holds only things made alike, so the one handed over is
+// made afresh from the same template; a single item moves itself, with whatever was done to it.
+bool handOverOne(Game &game, const std::shared_ptr<Item> &item, Object &receiver) {
+    if (item->stackSize() <= 1) {
+        return transferItemTo(game, item, receiver);
+    }
+    auto made = receiver.addItem(item->blueprintResRef(), 1, item->isDropable());
+    if (!made) {
+        return false;
+    }
+    item->setStackSize(item->stackSize() - 1);
+    return true;
+}
+
+} // namespace
+
 std::string CoopSession::hostGiveToGuest(const std::string &who, const std::string &which) {
     if (!isHost() || !freeMode()) {
         return "only the host of a Free Mode session can give";
@@ -1203,7 +1222,7 @@ std::string CoopSession::hostGiveToGuest(const std::string &who, const std::stri
         if (!found) {
             return "no such item in the inventory";
         }
-        if (!transferItemTo(_game, found, *creature)) {
+        if (!handOverOne(_game, found, *creature)) {
             return "the item could not be moved";
         }
         info("Co-op: the host gave " + found->tag() + " to " + client.name);
@@ -1246,7 +1265,7 @@ std::string CoopSession::hostTakeFromGuest(const std::string &who, const std::st
         if (!found) {
             return worn ? "they have it on" : "they carry no such item";
         }
-        if (!transferItemTo(_game, found, *taker)) {
+        if (!handOverOne(_game, found, *taker)) {
             return "the item could not be moved";
         }
         info("Co-op: " + client.name + " handed " + found->tag() + " to the host");

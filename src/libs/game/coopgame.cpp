@@ -944,6 +944,7 @@ void Game::initCoopConsole() {
                 entry["label"] = table->getString(row, "label");
                 entry["weapon"] = table->getInt(row, "weapontype", 0) != 0;
                 entry["ranged"] = table->getInt(row, "rangedweapon", 0) != 0;
+                entry["wield"] = table->getInt(row, "weaponwield", 0);
                 if (focus > 0) {
                     entry["focus"] = focus;
                 }
@@ -957,6 +958,16 @@ void Game::initCoopConsole() {
         json::object root;
         root["feats"] = std::move(feats);
         root["kinds"] = std::move(kinds);
+        // The rules' own names: the feat line that is for a weapon in each hand, the one that is for a single
+        // weapon with the other hand empty, and how a weapon is held (a double blade counts as two; a rifle or
+        // a heavy weapon takes both hands).
+        root["twoWeaponFeat"] = static_cast<int>(FeatType::Ambidexterity);
+        root["duelFeat"] = static_cast<int>(FeatType::Dueling);
+        root["doubleWield"] = static_cast<int>(WeaponWield::DoubleBladedSword);
+        json::array bothHands;
+        bothHands.push_back(static_cast<int>(WeaponWield::BlasterRifle));
+        bothHands.push_back(static_cast<int>(WeaponWield::HeavyWeapon));
+        root["bothHandsWield"] = std::move(bothHands);
         _console.printLine(json::serialize(root));
     });
     // Self-knowledge (fork addition): what the controlled character is and can do, read by a

@@ -682,8 +682,14 @@ void Game::initCoopConsole() {
             {InventorySlots::rightWeapon, "main hand"}, {InventorySlots::leftWeapon, "off hand"},
             {InventorySlots::leftArm, "left arm"}, {InventorySlots::rightArm, "right arm"},
             {InventorySlots::implant, "implant"}, {InventorySlots::belt, "belt"}};
-        auto describe = [](const Item &item) {
+        auto describe = [this](const Item &item) {
             json::object entry;
+            // What using it does, as the game's own companions sort what they carry (ItemAttributes::addItem).
+            if (auto type = item.activateSpell()) {
+                if (auto spell = _services.game.spells.get(*type)) {
+                    entry["use"] = spell->hostile ? "attack" : (spell->itemTargeting ? "guard" : "heal");
+                }
+            }
             entry["tpl"] = item.blueprintResRef();
             entry["tag"] = item.tag();
             entry["name"] = item.localizedName();

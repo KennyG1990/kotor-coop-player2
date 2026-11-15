@@ -1213,6 +1213,49 @@ std::string CoopSession::hostGiveToGuest(const std::string &who, const std::stri
     return "no such player";
 }
 
+// The other way about (fork addition): a guest's character hands the player a thing it carries. The item itself
+// moves, with whatever was done to it, exactly as hostGiveToGuest moves one the other way. Nothing unless called.
+std::string CoopSession::hostTakeFromGuest(const std::string &who, const std::string &which) {
+    if (!isHost() || !freeMode()) {
+        return "only the host of a Free Mode session can take";
+    }
+    auto taker = _game.party().actualPlayer();
+    if (!taker) {
+        return "there is no player to hand it to";
+    }
+    for (auto &[connection, client] : _clients) {
+        if (!boost::iequals(client.name, who) && std::to_string(client.clientId) != who) {
+            continue;
+        }
+        auto creature = client.guestId ? _game.getObjectById<Creature>(client.guestId) : nullptr;
+        if (!creature || !creature->isRuntimeLive() || creature->isDead()) {
+            return "that player's character is not here";
+        }
+        std::shared_ptr<Item> found;
+        bool worn = false;
+        for (const auto &item : creature->items()) {
+            if (item && (boost::iequals(item->blueprintResRef(), which) || boost::iequals(item->tag(), which))) {
+                if (item->isEquipped()) {
+                    worn = true;
+                    continue;
+                }
+                found = item; // a copy: the transfer changes the list being read
+                break;
+            }
+        }
+        if (!found) {
+            return worn ? "they have it on" : "they carry no such item";
+        }
+        if (!transferItemTo(_game, found, *taker)) {
+            return "the item could not be moved";
+        }
+        info("Co-op: " + client.name + " handed " + found->tag() + " to the host");
+        hostSendGuestInventory(client);
+        return "";
+    }
+    return "no such player";
+}
+
 bool CoopSession::hostSetTalkable(const std::string &who, bool on) {
     if (!isHost()) {
         return false;

@@ -762,6 +762,19 @@ void Game::initCoopConsole() {
         }
         _console.printLine("coop gave " + std::string(*args[2]) + " to " + std::string(*args[1]));
     });
+    _console.registerCommand("cooptakeback", "co-op Free Mode host: a guest's character hands you an item it carries (the item itself, with what was done to it): cooptakeback <player name|client id> <template|tag>", [this](const ConsoleArgs &args) {
+        if (args.size() != 3) {
+            throw std::runtime_error("Usage: cooptakeback <player name|client id> <template|tag>");
+        }
+        if (!_coop || !_coop->isHost()) {
+            throw std::runtime_error("only the host can take back");
+        }
+        auto why = _coop->hostTakeFromGuest(std::string(*args[1]), std::string(*args[2]));
+        if (!why.empty()) {
+            throw std::runtime_error(why);
+        }
+        _console.printLine("coop took " + std::string(*args[2]) + " back from " + std::string(*args[1]));
+    });
     // A conversation driven from outside, on the game's own conversation screen (outsidedialog.h).
     _console.registerCommand("talkopen", "open or continue a conversation driven from outside: talkopen <object id of the one spoken to> <base64 of the JSON exchange>", [this](const ConsoleArgs &args) {
         auto id = args.get<uint32_t>(1);

@@ -468,6 +468,7 @@ public:
      * template or tag. Returns an empty string, or why nothing was given.
      */
     std::string hostGiveToGuest(const std::string &who, const std::string &which);
+    std::string hostTakeFromGuest(const std::string &who, const std::string &which);
     /**
      * Host (fork addition): mark a guest as one the host talks to by clicking their
      * character, as with a party member. Off for every guest unless set; a program

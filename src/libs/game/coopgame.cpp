@@ -26,7 +26,9 @@
 #include "reone/game/outsidedialog.h"
 #include "reone/game/location.h"
 #include "reone/game/action/jumptolocation.h"
+#include "reone/resource/2da.h"
 #include "reone/resource/director.h"
+#include "reone/resource/provider/2das.h"
 #include "reone/game/gui/chargen.h"
 #include "reone/game/gui/ingame.h"
 #include "reone/game/gui/ingame/options.h"
@@ -891,6 +893,71 @@ void Game::initCoopConsole() {
         }
         auto options = coopLevelUpOptions(_services.game.feats, _services.game.spells, *clazz, member->attributes(), member->goodEvil() < 50);
         _console.printLine(coopLevelUpOptionsJson(options));
+    });
+    // The game's own tables behind a fighter's choices (fork addition), for a seat driven from outside: which
+    // feats are ways of striking in close or of shooting, which feat each one follows, and for each kind of
+    // weapon its focus, specialisation and required feats. Read-only; the same on host and client.
+    _console.registerCommand("coopfightfacts", "the game's tables behind a fighter's choices, as one line of JSON: feats (close or ranged, and what each follows) and weapon kinds (focus, specialisation and required feats)", [this](const ConsoleArgs &) {
+        namespace json = boost::json;
+        json::array feats;
+        for (int i = 1; i < 512; ++i) {
+            auto feat = _services.game.feats.get(static_cast<FeatType>(i));
+            if (!feat || feat->name.empty()) {
+                continue;
+            }
+            json::object entry;
+            entry["id"] = i;
+            entry["name"] = feat->name;
+            if (feat->useType == 0) {
+                entry["use"] = "melee";
+            } else if (feat->useType == 1) {
+                entry["use"] = "ranged";
+            }
+            json::array after;
+            for (FeatType before : {feat->preReqFeat1, feat->preReqFeat2}) {
+                if (static_cast<int>(before) > 0 && _services.game.feats.get(before)) {
+                    after.push_back(static_cast<int>(before));
+                }
+            }
+            if (!after.empty()) {
+                entry["after"] = std::move(after);
+            }
+            feats.push_back(std::move(entry));
+        }
+        json::array kinds;
+        if (auto table = _services.resource.twoDas.get("baseitems")) {
+            for (int row = 0; row < table->getRowCount(); ++row) {
+                int focus = table->getInt(row, "focfeat", 0);
+                int spec = table->getInt(row, "specfeat", 0);
+                json::array needs;
+                for (const char *column : {"reqfeat0", "reqfeat1", "reqfeat2"}) {
+                    int feat = table->getInt(row, column, 0);
+                    if (feat > 0) {
+                        needs.push_back(feat);
+                    }
+                }
+                if (focus <= 0 && spec <= 0 && needs.empty()) {
+                    continue;
+                }
+                json::object entry;
+                entry["base"] = row;
+                entry["label"] = table->getString(row, "label");
+                entry["weapon"] = table->getInt(row, "weapontype", 0) != 0;
+                entry["ranged"] = table->getInt(row, "rangedweapon", 0) != 0;
+                if (focus > 0) {
+                    entry["focus"] = focus;
+                }
+                if (spec > 0) {
+                    entry["spec"] = spec;
+                }
+                entry["needs"] = std::move(needs);
+                kinds.push_back(std::move(entry));
+            }
+        }
+        json::object root;
+        root["feats"] = std::move(feats);
+        root["kinds"] = std::move(kinds);
+        _console.printLine(json::serialize(root));
     });
     // Self-knowledge (fork addition): what the controlled character is and can do, read by a
     // seat driven from outside so that it speaks and chooses by its own sheet. Read-only.

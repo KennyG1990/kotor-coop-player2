@@ -70,6 +70,12 @@ bool mayBrainAct(const CreatureFacts &creature, const WorldFacts &world) {
     if (!world.smartCompanions || creature.dead) {
         return false;
     }
+    if (creature.guestControlled && world.guestBrain) {
+        // Opt-in (--coop-guest-brain): a co-op player's own character is fought for by the brain while its player
+        // has it on auto-combat, as the host's leader is. It has no round script of its own and sits outside the
+        // party table, so neither of those is asked of it.
+        return creature.autoCombat;
+    }
     if (!creature.genericRoundScript) {
         return false; // scripted and boss creatures keep their own AI
     }
@@ -198,6 +204,7 @@ WorldFacts observeWorld(Game &game) {
         world.coopHost = coop->isHost();
         world.coopClient = coop->isClient();
         world.dedicated = coop->dedicated();
+        world.guestBrain = coop->isHost() && coop->guestBrain();
     }
     world.smartCompanions = game.options().game.smartCompanions;
     world.clicksBlocked = game.areClicksBlocked();

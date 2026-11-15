@@ -252,6 +252,28 @@ TEST(CoopControlPolicy, steering) {
     EXPECT_FALSE(steeringOverridesAction(FrontAction())) << "an empty queue";
 }
 
+TEST(CoopControlPolicy, guestBrainIsOptIn) {
+    // --coop-guest-brain: a guest's own character on auto-combat is fought for by the brain. It has no round
+    // script and sits outside the party table. Without the option nothing changes for it.
+    CreatureFacts guest;
+    guest.guestControlled = true;
+    guest.autoCombat = true;
+    WorldFacts world;
+    world.coopHost = true;
+    world.smartCompanions = true;
+    EXPECT_FALSE(mayBrainAct(guest, world)) << "the option is off";
+    world.guestBrain = true;
+    EXPECT_TRUE(mayBrainAct(guest, world)) << "on auto-combat, with the option";
+    guest.autoCombat = false;
+    EXPECT_FALSE(mayBrainAct(guest, world)) << "under its player's hand";
+    guest.autoCombat = true;
+    guest.dead = true;
+    EXPECT_FALSE(mayBrainAct(guest, world)) << "dead";
+    guest.dead = false;
+    world.smartCompanions = false;
+    EXPECT_FALSE(mayBrainAct(guest, world)) << "smart companions off";
+}
+
 TEST(CoopControlPolicy, deterministic) {
     // Pure functions: the same facts give the same answers, every time.
     auto rows = table();

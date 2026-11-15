@@ -77,6 +77,7 @@ struct WorldFacts {
     bool dedicated {false};
     bool hostOnlyScenes {false};
     bool smartCompanions {false};
+    bool guestBrain {false}; // --coop-guest-brain: a guest's character on auto-combat uses the brain
     bool clicksBlocked {false}; // NoClicksFor is running
 };
 

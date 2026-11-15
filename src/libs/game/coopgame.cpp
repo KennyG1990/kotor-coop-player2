@@ -1293,6 +1293,7 @@ std::shared_ptr<CoopSession> startCoopSession(Game &game, const CoopLaunch &laun
     config.hostOnlyTransitions = launch.hostOnlyTransitions;
     // Party seats are a Free Mode host's: a Story Mode guest already plays a party member.
     config.partySeats = launch.mode == "free" && launch.role == CoopRole::Host ? clampPartySeats(launch.partySeats) : 0;
+    config.guestBrain = launch.mode == "free" && launch.role == CoopRole::Host && launch.guestBrain;
     config.hostOnlyTrading = launch.hostOnlyTrading;
     config.hostOnlyScenes = launch.hostOnlyScenes;
     config.noPause = launch.noPause;

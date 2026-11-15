@@ -77,6 +77,7 @@ struct CoopConfig {
     // Host options (co-op design notes)
     bool hostOnlyTransitions {false}; // only the host's exit moves the party
     int partySeats {0};               // Free Mode host: guests shown as party members (partyseats.h); 0 off
+    bool guestBrain {false};          // Free Mode host: a guest's character on auto-combat is fought for by the companion brain; off by default
     bool hostOnlyTrading {false};     // Story Mode: only the host may open stores
     bool hostOnlyScenes {true};       // only the host's character starts scripted conversations and cutscenes (both modes)
     bool noPause {false};             // "No pause in co-op"
@@ -135,6 +136,7 @@ struct CoopLaunch {
     std::filesystem::path executablePath;
     bool hostOnlyTransitions {false};
     int partySeats {0}; // --coop-party-seats
+    bool guestBrain {false}; // --coop-guest-brain
     bool hostOnlyTrading {false};
     bool hostOnlyScenes {true};
     bool noPause {false};
@@ -300,6 +302,7 @@ public:
     // Dedicated host (coopdedicated.cpp)
 
     bool dedicated() const { return _config.dedicated; }
+    bool guestBrain() const { return _config.guestBrain; }
     /** Host: remove a player (the admin interface). False when no such client. */
     bool kick(uint32_t clientId);
     /** Host, dedicated: the client who makes story choices (see StoryDriverTracker); 0 for none. */

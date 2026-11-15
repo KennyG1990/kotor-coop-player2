@@ -230,6 +230,7 @@ void Engine::init() {
     defaults.preferredTag = _options.coop.slot;
     defaults.hostOnlyTransitions = _options.coop.hostOnlyTransitions;
     defaults.partySeats = _options.coop.partySeats;
+    defaults.guestBrain = _options.coop.guestBrain;
     defaults.hostOnlyTrading = _options.coop.hostOnlyTrading;
     defaults.hostOnlyScenes = _options.coop.hostOnlyScenes;
     defaults.noPause = _options.coop.noPause;

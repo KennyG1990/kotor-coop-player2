@@ -143,6 +143,7 @@ std::unique_ptr<Options> OptionsParser::parse() {
         ("coop-name", value<std::string>()->default_value(""), "co-op player name")                                            //
         ("coop-slot", value<std::string>()->default_value(""), "co-op client: the companion tag to ask for; empty for any")    //
         ("coop-host-only-transitions", value<bool>()->default_value(false)->implicit_value(true), "co-op host: only the host's exit moves the party (no ready check)") //
+        ("coop-guest-brain", value<bool>()->default_value(false)->implicit_value(true), "co-op Free Mode host: a guest's own character that its player has put on auto-combat is fought for by the companion brain (feats, powers, grenades), as the host's leader is. Off by default: a guest on auto-combat then fights as before") //
         ("coop-party-seats", value<int>()->default_value(0), "co-op Free Mode host: this many guests (0-2) are shown as party members: a party portrait on the HUD and a place on the party selection screen. They stay outside the party table, so story scripts are unaffected") //
         ("coop-host-only-scenes", value<bool>()->default_value(true)->implicit_value(true), "co-op host: only the host's character starts scripted conversations and cutscenes (a guest entering their trigger does not)") //
         ("coop-host-only-trading", value<bool>()->default_value(false)->implicit_value(true), "co-op host: only the host may open Story Mode stores") //
@@ -399,6 +400,7 @@ std::unique_ptr<Options> OptionsParser::parse() {
     options->coop.slot = vars["coop-slot"].as<std::string>();
     options->coop.hostOnlyTransitions = vars["coop-host-only-transitions"].as<bool>();
     options->coop.partySeats = vars["coop-party-seats"].as<int>();
+    options->coop.guestBrain = vars["coop-guest-brain"].as<bool>();
     options->coop.hostOnlyScenes = vars["coop-host-only-scenes"].as<bool>();
     options->coop.hostOnlyTrading = vars["coop-host-only-trading"].as<bool>();
     options->coop.noPause = vars["coop-no-pause"].as<bool>();

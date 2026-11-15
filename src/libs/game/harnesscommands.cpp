@@ -581,8 +581,13 @@ void Game::consoleGrantAll(const ConsoleArgs &args) {
     }
     creature->recalculatePermanentVitality();
     creature->addBaseForcePoints(force);
-    creature->setCurrentForcePoints(creature->maxForcePoints());
-    _console.printLine(str(boost::format("grantall id=%u powers=%d feats=%d skills=%d force=%d") % creature->id() % powers % feats % rank % creature->maxForcePoints()));
+    // One without a Force class has no pool of its own (forcepoints.cpp): the points are given as temporary ones,
+    // which the game counts toward what can be spent.
+    if (creature->maxForcePoints() < force) {
+        creature->addTemporaryForcePoints(force - creature->maxForcePoints());
+    }
+    creature->setCurrentForcePoints(force);
+    _console.printLine(str(boost::format("grantall id=%u powers=%d feats=%d skills=%d force=%d") % creature->id() % powers % feats % rank % creature->currentForce()));
 }
 
 void Game::consoleAutoCombat(const ConsoleArgs &args) {

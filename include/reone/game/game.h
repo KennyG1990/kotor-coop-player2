@@ -2090,6 +2090,7 @@ private:
     void consoleCloseScreen(const ConsoleArgs &tokens);
     void consolePickReply(const ConsoleArgs &tokens);
     void consoleTakeAll(const ConsoleArgs &tokens);
+    void consoleTakeFrom(const ConsoleArgs &tokens);
     void consoleContainerGive(const ConsoleArgs &tokens);
     void consoleEquipAuto(const ConsoleArgs &tokens);
     void consoleEquipSlot(const ConsoleArgs &tokens);

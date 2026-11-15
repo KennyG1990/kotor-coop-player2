@@ -44,6 +44,7 @@
 
 #include <boost/algorithm/string.hpp>
 #include <boost/format.hpp>
+#include <boost/json.hpp>
 
 #include "reone/game/equipmentoperation.h"
 #include "reone/game/equipmentrules.h"
@@ -712,6 +713,67 @@ void Game::consoleTakeAll(const ConsoleArgs &args) {
     }
     _container->takeAll();
     _console.printLine("takeall: done");
+}
+
+// A container opened by someone other than the player (a companion driven from outside, say): what is in it goes
+// to the player, exactly as the container screen's OK button gives it, with no screen. Does nothing unless called.
+void Game::consoleTakeFrom(const ConsoleArgs &args) {
+    namespace json = boost::json;
+    HarnessArgs parsed(args);
+    parsed.requireKnown({});
+    if (parsed.positional.size() != 1 || parsed.actor) {
+        throw std::runtime_error("Usage: takefrom <object id|tag>");
+    }
+    if (_coop && !_coop->isHost()) {
+        throw std::runtime_error("takefrom: only the host can take for the player");
+    }
+    auto mod = module();
+    if (!mod || !mod->area()) {
+        throw std::runtime_error("Module is not loaded");
+    }
+    if (_screen == Screen::Container) {
+        throw std::runtime_error("takefrom: a container screen is open");
+    }
+    auto placeable = std::dynamic_pointer_cast<Placeable>(findConsoleObject(parsed.positional[0]));
+    if (!placeable || !placeable->isRuntimeLive() || !placeable->hasInventory()) {
+        throw std::runtime_error("takefrom: that is not a container");
+    }
+    if (placeable->isLocked()) {
+        throw std::runtime_error("takefrom: it is locked");
+    }
+    if (!placeable->isOpen() && placeable->animationState() != 1) {
+        throw std::runtime_error("takefrom: it has not been opened");
+    }
+    std::shared_ptr<Creature> player = _party.player();
+    if (!player) {
+        throw std::runtime_error("takefrom: there is no player");
+    }
+    json::array items;
+    int credits = 0;
+    for (const auto &item : placeable->items()) {
+        if (!item || !item->isDropable()) {
+            continue;
+        }
+        if (item->isCredits()) {
+            credits += item->stackSize();
+            continue;
+        }
+        json::object entry;
+        entry["tpl"] = item->blueprintResRef();
+        entry["name"] = item->localizedName();
+        entry["stack"] = item->stackSize();
+        items.push_back(std::move(entry));
+    }
+    bool any = !items.empty() || credits > 0;
+    if (any) {
+        placeable->moveDropableItemsTo(*player);
+        placeable->runOnInvDisturbed(player->id(), InventoryDisturbType::Removed, script::kObjectInvalid);
+    }
+    json::object result;
+    result["container"] = placeable->name();
+    result["items"] = std::move(items);
+    result["credits"] = credits;
+    _console.printLine(json::serialize(result));
 }
 
 void Game::consoleContainerGive(const ConsoleArgs &args) {

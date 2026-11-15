@@ -818,6 +818,7 @@ void Game::initConsole() {
     registerConsoleCommand("closescreen", "close a container or in-game menu as its Close button does", &Game::consoleCloseScreen);
     registerConsoleCommand("pickreply", "pick the conversation reply at a list row, as clicking it does: pickreply <row>", &Game::consolePickReply);
     registerConsoleCommand("takeall", "take every item from the open container, as its OK button does", &Game::consoleTakeAll);
+    registerConsoleCommand("takefrom", "give the player everything that can be taken from a container someone has opened, as its screen's OK button does, without the screen: takefrom <object id|tag>; prints what was taken as one line of JSON", &Game::consoleTakeFrom);
     registerConsoleCommand("containergive", "move one item (or one of a stack) from the leader into a placeable container, as the container Give does: containergive <item resref> <container tag>", &Game::consoleContainerGive);
     registerConsoleCommand("equipauto", "equip inventory items into empty slots: equipauto [@id|tag]", &Game::consoleEquipAuto);
     registerConsoleCommand("equipslot", "equip an inventory item into a named or numbered slot, as the equipment screen does: equipslot <item tag|template> <slot|rightweapon2|leftweapon2|...> [@id|tag]", &Game::consoleEquipSlot);

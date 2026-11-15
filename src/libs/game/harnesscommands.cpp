@@ -826,6 +826,13 @@ void Game::consoleTakeFrom(const ConsoleArgs &args) {
         entry["stack"] = item->stackSize();
         items.push_back(std::move(entry));
     }
+    // Free Mode: whoever opened it as a guest (the companion) keeps no copy of it, so nothing comes out twice.
+    json::array guests;
+    if (_coop) {
+        for (const auto &name : _coop->hostClearGuestLoot(*placeable)) {
+            guests.push_back(json::value(name));
+        }
+    }
     bool any = !items.empty() || credits > 0;
     if (any) {
         placeable->moveDropableItemsTo(*player);
@@ -835,6 +842,7 @@ void Game::consoleTakeFrom(const ConsoleArgs &args) {
     result["container"] = placeable->name();
     result["items"] = std::move(items);
     result["credits"] = credits;
+    result["guests_cleared"] = std::move(guests);
     _console.printLine(json::serialize(result));
 }
 

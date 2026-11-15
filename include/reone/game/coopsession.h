@@ -421,6 +421,10 @@ public:
     bool freeMode() const { return _config.mode == "free"; }
     /** Host: a container screen opened on the host (Free Mode keeps a copy of what it held for the guests). */
     void onContainerOpened(const Object &container);
+    /** Host, Free Mode: every guest now viewing this container has its own copy of it marked taken, so what the
+     *  host takes from it for the player is not also there for them. Returns those guests' names. Called only by
+     *  the takefrom console command, before it moves anything. */
+    std::vector<std::string> hostClearGuestLoot(const Object &container);
     /** The guests the HUD lists (Free Mode): the host sees all, a guest the others. */
     std::vector<net::GuestRosterEntry> guestList() const;
     /**

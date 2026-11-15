@@ -483,6 +483,27 @@ void CoopSession::hostCaptureLoot(const Object &container) {
     _lootLedger.capture(module, key, lite);
 }
 
+std::vector<std::string> CoopSession::hostClearGuestLoot(const Object &container) {
+    std::vector<std::string> cleared;
+    if (!isHost() || !freeMode()) {
+        return cleared;
+    }
+    hostCaptureLoot(container);
+    const auto &entries = _lootBaseline[container.id()];
+    const auto module = lootModule();
+    const auto key = lootKey(container);
+    for (auto &[connection, client] : _clients) {
+        if (!client.guestId || client.viewing != container.id()) {
+            continue;
+        }
+        for (size_t i = 0; i < entries.size(); ++i) {
+            _lootLedger.markTaken(module, key, client.name, i);
+        }
+        cleared.push_back(client.name);
+    }
+    return cleared;
+}
+
 std::vector<ContainerItem> CoopSession::hostContainerView(HostClient &client, const Object &container) {
     if (!freeMode() || !client.guestId) {
         return containerItems(container);

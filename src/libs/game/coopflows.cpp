@@ -483,7 +483,7 @@ void CoopSession::hostCaptureLoot(const Object &container) {
     _lootLedger.capture(module, key, lite);
 }
 
-std::vector<std::string> CoopSession::hostClearGuestLoot(const Object &container) {
+std::vector<std::string> CoopSession::hostClearGuestLoot(const Object &container, const std::string &guest) {
     std::vector<std::string> cleared;
     if (!isHost() || !freeMode()) {
         return cleared;
@@ -492,14 +492,26 @@ std::vector<std::string> CoopSession::hostClearGuestLoot(const Object &container
     const auto &entries = _lootBaseline[container.id()];
     const auto module = lootModule();
     const auto key = lootKey(container);
-    for (auto &[connection, client] : _clients) {
-        if (!client.guestId || client.viewing != container.id()) {
-            continue;
+    auto clear = [&](const std::string &name) {
+        if (std::find(cleared.begin(), cleared.end(), name) != cleared.end()) {
+            return;
         }
         for (size_t i = 0; i < entries.size(); ++i) {
-            _lootLedger.markTaken(module, key, client.name, i);
+            _lootLedger.markTaken(module, key, name, i);
         }
-        cleared.push_back(client.name);
+        cleared.push_back(name);
+    };
+    if (!guest.empty()) {
+        // By name: whether or not their screen of it is still open.
+        if (_guests.count(guest)) {
+            clear(guest);
+        }
+        return cleared;
+    }
+    for (auto &[connection, client] : _clients) {
+        if (client.guestId && client.viewing == container.id()) {
+            clear(client.name);
+        }
     }
     return cleared;
 }

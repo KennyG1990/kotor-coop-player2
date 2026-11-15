@@ -783,8 +783,12 @@ void Game::consoleTakeFrom(const ConsoleArgs &args) {
     namespace json = boost::json;
     HarnessArgs parsed(args);
     parsed.requireKnown({});
-    if (parsed.positional.size() != 1 || parsed.actor) {
-        throw std::runtime_error("Usage: takefrom <object id|tag>");
+    if (parsed.positional.empty() || parsed.actor) {
+        throw std::runtime_error("Usage: takefrom <object id|tag> [guest name]");
+    }
+    std::string guest;
+    for (size_t i = 1; i < parsed.positional.size(); ++i) {
+        guest += (i > 1 ? " " : "") + parsed.positional[i];
     }
     if (_coop && !_coop->isHost()) {
         throw std::runtime_error("takefrom: only the host can take for the player");
@@ -829,7 +833,7 @@ void Game::consoleTakeFrom(const ConsoleArgs &args) {
     // Free Mode: whoever opened it as a guest (the companion) keeps no copy of it, so nothing comes out twice.
     json::array guests;
     if (_coop) {
-        for (const auto &name : _coop->hostClearGuestLoot(*placeable)) {
+        for (const auto &name : _coop->hostClearGuestLoot(*placeable, guest)) {
             guests.push_back(json::value(name));
         }
     }

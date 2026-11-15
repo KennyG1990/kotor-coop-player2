@@ -528,6 +528,26 @@ void Game::consoleCancelCombat(const ConsoleArgs &args) {
     info(line);
 }
 
+void Game::consoleBrainHolds(const ConsoleArgs &args) {
+    HarnessArgs parsed(args);
+    parsed.requireKnown({});
+    if (parsed.positional.empty() || parsed.positional.size() > 2 || parsed.actor) {
+        throw std::runtime_error("Usage: brainholds <id|tag> [mask 0-31]");
+    }
+    auto creature = std::dynamic_pointer_cast<Creature>(findConsoleObject(parsed.positional[0]));
+    if (!creature) {
+        throw std::runtime_error("brainholds: that is not a creature");
+    }
+    if (parsed.positional.size() == 2) {
+        int mask = std::stoi(std::string(parsed.positional[1]));
+        if (mask < 0 || mask > 31) {
+            throw std::runtime_error("brainholds: the mask is 0 to 31");
+        }
+        creature->setBrainHolds(static_cast<uint32_t>(mask));
+    }
+    _console.printLine(str(boost::format("brainholds id=%u tag=%s holds=%u") % creature->id() % creature->tag() % creature->brainHolds()));
+}
+
 void Game::consoleAutoCombat(const ConsoleArgs &args) {
     HarnessArgs parsed(args);
     parsed.requireKnown({});

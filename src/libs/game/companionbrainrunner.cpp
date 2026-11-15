@@ -18,6 +18,7 @@
 // "Smarter companions" (C13): the snapshot the brain decides on, and the
 // actions its decision queues. Behaviour notes: design note c13_companions.
 
+#include <algorithm>
 #include "reone/game/companionbrain.h"
 
 #include "reone/game/action/attackobject.h"
@@ -281,6 +282,25 @@ void collectTalents(CompanionView &view, Game &game, const Creature &creature, S
         talent.rangedFeat = feat->useType == 1;
         talent.rank = feat->maxCR;
         view.talents.push_back(talent);
+    }
+    // What is held back for this creature (console brainholds; nothing unless it was called).
+    if (uint32_t holds = creature.brainHolds()) {
+        auto held = [holds](const Talent &talent) {
+            if (talent.role == TalentRole::AttackFeat) {
+                return (holds & 1u) != 0;
+            }
+            if (talent.item == 0) {
+                return (holds & 2u) != 0; // a Force power they know
+            }
+            if (talent.role == TalentRole::Grenade) {
+                return (holds & 4u) != 0;
+            }
+            if (talent.role == TalentRole::Heal || talent.role == TalentRole::Cure) {
+                return (holds & 8u) != 0;
+            }
+            return (holds & 16u) != 0;
+        };
+        view.talents.erase(std::remove_if(view.talents.begin(), view.talents.end(), held), view.talents.end());
     }
 }
 

@@ -615,6 +615,10 @@ public:
      */
     bool autoCombat() const { return _autoCombat; }
     void setAutoCombat(bool autoCombat) { _autoCombat = autoCombat; }
+    /** What the companion brain holds back for this creature (console brainholds); 0, the default, is nothing.
+     *  1 attack feats, 2 Force powers, 4 grenades, 8 healing items, 16 other items. Not kept in saves. */
+    uint32_t brainHolds() const { return _brainHolds; }
+    void setBrainHolds(uint32_t holds) { _brainHolds = holds; }
     /** How fast the mouth moves on a line with no voice (1: as the game plays it). */
     void setSilentTalkSpeed(float speed) {
         speed = speed < 0.1f ? 0.1f : (speed > 1.0f ? 1.0f : speed);
@@ -1161,6 +1165,7 @@ private:
     bool _cancelCombatPending {false};
     std::vector<std::weak_ptr<Action>> _cancelledActions;
     bool _autoCombat {false};
+    uint32_t _brainHolds {0};
     // Smarter companions: the brain moved this creature last round (C13).
     bool _brainRepositioned {false};
     float _autoCombatIdle {0.0f};

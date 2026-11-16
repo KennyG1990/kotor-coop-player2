@@ -4357,6 +4357,42 @@ TEST(Reputes, should_use_authored_creature_faction_dispositions) {
     EXPECT_TRUE(reputes.getIsNeutral(*neutral, *friendly1));
 }
 
+TEST(Reputes, a_duel_makes_two_creatures_enemies_of_each_other_alone) {
+    TestEngine &engine = testEngine();
+    StubConsole console;
+    Game game(GameID::KotOR, "", engine.options(), engine.services(), console);
+    NiceMock<MockTwoDAs> twoDas;
+    ON_CALL(twoDas, get("repute")).WillByDefault(Return(makeReputeTable()));
+    Reputes reputes(twoDas);
+    reputes.init();
+
+    auto one = game.newCreature();
+    one->setFaction(Faction::Friendly1);
+    auto two = game.newCreature();
+    two->setFaction(Faction::Friendly1);
+    auto third = game.newCreature();
+    third->setFaction(Faction::Friendly1);
+    ASSERT_FALSE(reputes.getIsEnemy(*one, *two));
+    EXPECT_FALSE(reputes.inDuel(one->id(), two->id()));
+
+    reputes.setDuel(two->id(), one->id(), true);
+    EXPECT_TRUE(reputes.inDuel(one->id(), two->id()));
+    EXPECT_TRUE(reputes.getIsEnemy(*one, *two));
+    EXPECT_TRUE(reputes.getIsEnemy(*two, *one));
+    EXPECT_FALSE(reputes.getIsFriend(*one, *two));
+    EXPECT_FALSE(reputes.getIsNeutral(*one, *two));
+    EXPECT_FALSE(reputes.getIsEnemy(*one, *third)); // nobody else is drawn in
+    EXPECT_FALSE(reputes.getIsEnemy(*third, *two));
+
+    reputes.setDuel(one->id(), two->id(), false);
+    EXPECT_FALSE(reputes.getIsEnemy(*one, *two));
+    reputes.setDuel(one->id(), one->id(), true); // nobody duels themselves
+    EXPECT_FALSE(reputes.inDuel(one->id(), one->id()));
+    reputes.setDuel(one->id(), two->id(), true);
+    reputes.clearDuels();
+    EXPECT_FALSE(reputes.getIsEnemy(*one, *two));
+}
+
 TEST(AreaReputationSearch, treats_the_creature_being_searched_around_as_the_source) {
     TestEngine &engine = testEngine();
     StubConsole console;

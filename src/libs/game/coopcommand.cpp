@@ -312,7 +312,9 @@ net::CommandReject validateCoopCommand(
                 targets.use = CoopUse::Container;
                 return CommandReject::None;
             }
-            if (!game.party().isMember(*creature) && game.services().game.reputes.getIsEnemy(*actor, *creature)) {
+            const auto &reputes = game.services().game.reputes;
+            bool dueling = reputes.inDuel(actor->id(), creature->id()); // only ever set by coopduel
+            if ((dueling || !game.party().isMember(*creature)) && reputes.getIsEnemy(*actor, *creature)) {
                 return CommandReject::None; // using a hostile is attacking it
             }
             if (!creature->conversation().empty()) {

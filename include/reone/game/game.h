@@ -22,6 +22,8 @@
 #include <filesystem>
 #include <iosfwd>
 #include <functional>
+#include <map>
+#include <utility>
 #include <optional>
 
 #include "presentationpointer.h"
@@ -1424,6 +1426,8 @@ private:
 
     // Co-op (coopgame.cpp)
     std::shared_ptr<CoopSession> _coop;
+    // Duels set by coopduel: each pair (smaller id first) with whether each had minimum-one-hit-points before.
+    std::map<std::pair<uint32_t, uint32_t>, std::pair<bool, bool>> _coopDuels;
     std::shared_ptr<CoopLaunch> _coopDefaults; // shared: CoopLaunch is incomplete here
     std::shared_ptr<std::ofstream> _coopRecord;
     double _coopRecordClock {0.0};

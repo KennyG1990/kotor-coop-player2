@@ -143,6 +143,7 @@ void Reputes::replace(State state) {
     _factions = std::move(state.factions);
     _factionLabels = std::move(state.labels);
     _factionValues = std::move(state.values);
+    _duels.clear(); // a loaded game has other objects under those ids
 }
 
 void Reputes::loadBase(
@@ -210,6 +211,9 @@ void Reputes::adjustReputation(Faction sourceFaction, Faction targetFaction, int
 }
 
 bool Reputes::getIsEnemy(const Creature &source, const Creature &target) const {
+    if (inDuel(source.id(), target.id())) {
+        return true;
+    }
     return getIsEnemy(source.reputationFaction(), target.reputationFaction());
 }
 
@@ -218,11 +222,37 @@ bool Reputes::getIsEnemy(Faction sourceFaction, Faction targetFaction) const {
 }
 
 bool Reputes::getIsFriend(const Creature &source, const Creature &target) const {
+    if (inDuel(source.id(), target.id())) {
+        return false;
+    }
     return getReputation(source.reputationFaction(), target.reputationFaction()) > 50;
 }
 
 bool Reputes::getIsNeutral(const Creature &source, const Creature &target) const {
+    if (inDuel(source.id(), target.id())) {
+        return false;
+    }
     return getReputation(source.reputationFaction(), target.reputationFaction()) == 50;
+}
+
+void Reputes::setDuel(uint32_t first, uint32_t second, bool on) {
+    if (first == second) {
+        return;
+    }
+    auto pair = std::minmax(first, second);
+    if (on) {
+        _duels.insert({pair.first, pair.second});
+    } else {
+        _duels.erase({pair.first, pair.second});
+    }
+}
+
+bool Reputes::inDuel(uint32_t first, uint32_t second) const {
+    if (_duels.empty() || first == second) {
+        return false;
+    }
+    auto pair = std::minmax(first, second);
+    return _duels.count({pair.first, pair.second}) != 0;
 }
 
 } // namespace game

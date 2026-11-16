@@ -40,6 +40,7 @@
 #include "reone/game/object/module.h"
 #include "reone/game/party.h"
 #include "reone/game/partyseats.h"
+#include "reone/game/reputes.h"
 #include "reone/game/script/runner.h"
 #include "reone/net/bytes.h"
 #include "reone/net/fingerprint.h"
@@ -1350,6 +1351,83 @@ void Game::initCoopConsole() {
             throw std::runtime_error("no guest for client " + std::to_string(*id));
         }
         _console.printLine("coop credits " + std::to_string(*amount));
+    });
+    _console.registerCommand("coopduel", "co-op Free Mode host: two creatures fight each other alone and neither can die: coopduel start <id> <id> | status | end [<id> <id>]", [this](const ConsoleArgs &args) {
+        if (!_coop || !_coop->isHost() || !_coop->freeMode()) {
+            throw std::runtime_error("coopduel: host, Free Mode only");
+        }
+        auto &reputes = _services.game.reputes;
+        std::string verb = args[1] ? std::string(*args[1]) : std::string("status");
+        auto pairOf = [&](int at) {
+            auto first = args.get<uint32_t>(at);
+            auto second = args.get<uint32_t>(at + 1);
+            if (!first || !second || *first == *second) {
+                throw std::runtime_error("Usage (host): coopduel start <id> <id> | status | end [<id> <id>]");
+            }
+            return std::minmax(*first, *second);
+        };
+        auto finish = [&](std::pair<uint32_t, uint32_t> pair, std::pair<bool, bool> before) {
+            reputes.setDuel(pair.first, pair.second, false);
+            for (auto [id, minOne] : {std::make_pair(pair.first, before.first), std::make_pair(pair.second, before.second)}) {
+                if (auto creature = getObjectById<Creature>(id)) {
+                    creature->setMinOneHP(minOne);
+                    creature->clearAllActions(true); // stop swinging at each other
+                }
+            }
+        };
+        if (verb == "start") {
+            auto pair = pairOf(2);
+            auto first = getObjectById<Creature>(pair.first);
+            auto second = getObjectById<Creature>(pair.second);
+            if (!first || !second || first->isDead() || second->isDead()) {
+                throw std::runtime_error("coopduel: both must be living creatures");
+            }
+            if (!_coopDuels.count(pair)) {
+                _coopDuels[pair] = {first->isMinOneHP(), second->isMinOneHP()};
+            }
+            first->setMinOneHP(true);
+            second->setMinOneHP(true);
+            reputes.setDuel(pair.first, pair.second, true);
+            _console.printLine("{\"duel\":\"started\",\"a\":" + std::to_string(pair.first) + ",\"b\":" + std::to_string(pair.second) + "}");
+            return;
+        }
+        if (verb == "end") {
+            if (args.size() > 2) {
+                auto pair = pairOf(2);
+                auto found = _coopDuels.find(pair);
+                if (found != _coopDuels.end()) {
+                    finish(found->first, found->second);
+                    _coopDuels.erase(found);
+                }
+            } else {
+                for (const auto &[pair, before] : _coopDuels) {
+                    finish(pair, before);
+                }
+                _coopDuels.clear();
+                reputes.clearDuels();
+            }
+            _console.printLine("{\"duel\":\"ended\",\"left\":" + std::to_string(_coopDuels.size()) + "}");
+            return;
+        }
+        if (verb != "status") {
+            throw std::runtime_error("Usage (host): coopduel start <id> <id> | status | end [<id> <id>]");
+        }
+        // Who stands how, and who has yielded: at one hit point, the floor a duel keeps them on.
+        std::string out = "{\"duels\":[";
+        bool firstOut = true;
+        for (const auto &[pair, before] : _coopDuels) {
+            auto one = getObjectById<Creature>(pair.first);
+            auto two = getObjectById<Creature>(pair.second);
+            auto side = [](const std::shared_ptr<Creature> &c) {
+                return c ? "{\"hp\":" + std::to_string(c->currentHitPoints()) + ",\"max\":" + std::to_string(c->maxHitPoints()) +
+                               ",\"yielded\":" + (c->currentHitPoints() <= 1 ? "true" : "false") + "}"
+                         : std::string("null");
+            };
+            out += std::string(firstOut ? "" : ",") + "{\"a\":" + std::to_string(pair.first) + ",\"b\":" + std::to_string(pair.second) +
+                   ",\"first\":" + side(one) + ",\"second\":" + side(two) + "}";
+            firstOut = false;
+        }
+        _console.printLine(out + "]}");
     });
     _console.registerCommand("coopresult", "co-op client: the host's answer to a command: coopresult <seq>", [=](const ConsoleArgs &args) {
         auto seq = args.get<uint32_t>(1);

@@ -19,6 +19,9 @@
 
 #include "types.h"
 
+#include <set>
+#include <utility>
+
 namespace reone {
 
 namespace resource {
@@ -66,6 +69,12 @@ public:
     virtual bool getIsEnemy(Faction sourceFaction, Faction targetFaction) const = 0;
     virtual bool getIsFriend(const Creature &source, const Creature &target) const = 0;
     virtual bool getIsNeutral(const Creature &source, const Creature &target) const = 0;
+
+    /** Co-op duels: two creatures who are enemies to each other alone, whatever their factions. Nothing sets one
+     *  but the coopduel console command; none exist otherwise, and none are saved. */
+    virtual void setDuel(uint32_t first, uint32_t second, bool on) {}
+    virtual bool inDuel(uint32_t first, uint32_t second) const { return false; }
+    virtual void clearDuels() {}
 };
 
 class Reputes : public IReputes, boost::noncopyable {
@@ -91,11 +100,16 @@ public:
     bool getIsFriend(const Creature &source, const Creature &target) const override;
     bool getIsNeutral(const Creature &source, const Creature &target) const override;
 
+    void setDuel(uint32_t first, uint32_t second, bool on) override;
+    bool inDuel(uint32_t first, uint32_t second) const override;
+    void clearDuels() override { _duels.clear(); }
+
 private:
     resource::ITwoDAs &_twoDas;
     std::vector<FactionDefinition> _factions;
     std::vector<std::string> _factionLabels;
     std::vector<std::vector<int>> _factionValues;
+    std::set<std::pair<uint32_t, uint32_t>> _duels; // smaller id first
 
     void loadBase(
         const resource::TwoDA &repute,

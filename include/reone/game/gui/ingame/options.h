@@ -60,7 +60,12 @@ public:
     /** A companion program's settings screen (modmenu): its button shows only while one is set. */
     void openModMenu();
     bool modMenuOpen() const { return _modScreen && _modScreen->isOpen(); }
-    PresentationGUI *inputPage() override { return _coop && _coop->isOpen() ? _coop->inputPage() : this; }
+    PresentationGUI *inputPage() override {
+        if (_coop && _coop->isOpen()) {
+            return _coop->inputPage();
+        }
+        return modMenuOpen() ? static_cast<PresentationGUI *>(_modScreen.get()) : this;
+    }
 
 private:
     struct Controls {

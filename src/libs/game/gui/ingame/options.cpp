@@ -151,9 +151,11 @@ void OptionsMenu::addCoopButton() {
 }
 
 void OptionsMenu::addModButton() {
-    // A companion program's settings (modmenu): one more button, a copy of
-    // Quit a row below it (two rows on K2, whose Co-op button takes the first).
-    // Hidden until a program sets its screen.
+    // A companion program's settings (modmenu): one more button. K1: the
+    // free middle of the bottom bar, between Co-op and Close (the row below
+    // Exit Game is that bar, seen in a frame of a hidden game, 2026-11-16).
+    // K2: a copy of Quit two rows below it (Co-op takes the first). Hidden
+    // until a program sets its screen.
     auto gff = _presentationResources.gffs.get(_resRef, resource::ResType::Gui);
     if (!gff) {
         return;
@@ -170,7 +172,15 @@ void OptionsMenu::addModButton() {
     auto copy = *last;
     copy.TAG = "BTN_MODMENU";
     int row = last->EXTENT.TOP - above->EXTENT.TOP;
-    copy.EXTENT.TOP = last->EXTENT.TOP + row * (isTSL() ? 2 : 1);
+    copy.EXTENT.TOP = last->EXTENT.TOP + row * 2;
+    auto close = byTag("BTN_EXIT");
+    if (!isTSL() && close != parsed.CONTROLS.end()) {
+        int coopRight = kAuthoredPanelWidth - close->EXTENT.LEFT; // Co-op mirrors Close
+        copy = *close;
+        copy.TAG = "BTN_MODMENU";
+        copy.EXTENT.LEFT = coopRight + 4;
+        copy.EXTENT.WIDTH = std::max(40, close->EXTENT.LEFT - coopRight - 8);
+    }
     auto control = _gui->newControl(gui::ControlType::Button, copy.TAG);
     if (!control) {
         return;
@@ -180,6 +190,16 @@ void OptionsMenu::addModButton() {
     _gui->addControlToFront(_modButton, gui::IGUI::ControlCoordinates::Authored);
     if (isTSL()) {
         enableK2ButtonBodyFill(_modButton);
+    }
+    if (!isTSL() && _controls.BTN_EXIT) {
+        // The look of Co-op beside it: Close's frame and hover art, near-black fill.
+        _modButton->setTintBorderFill(false);
+        auto border = _controls.BTN_EXIT->borderOrNull() ? _controls.BTN_EXIT->border() : Control::Border();
+        _modButton->setBorder(std::move(border));
+        _modButton->setBorderFill("blackfill");
+        if (_controls.BTN_EXIT->hilightOrNull()) {
+            _modButton->setHilight(_controls.BTN_EXIT->hilight());
+        }
     }
     _modButton->setOnClick([this]() {
         openModMenu();

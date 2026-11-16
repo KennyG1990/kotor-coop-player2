@@ -1312,6 +1312,34 @@ bool CoopSession::setGuestCredits(uint32_t clientId, int credits) {
     return false;
 }
 
+std::optional<std::pair<std::string, int>> CoopSession::hostGuestPurse(uint32_t guestId) const {
+    if (!isHost() || !freeMode() || !guestId) {
+        return std::nullopt;
+    }
+    for (const auto &[connection, client] : _clients) {
+        if (client.guestReceived && client.guestId == guestId) {
+            auto record = _guests.find(client.name);
+            if (record != _guests.end()) {
+                return std::make_pair(client.name, static_cast<int>(record->second.credits));
+            }
+        }
+    }
+    return std::nullopt;
+}
+
+int CoopSession::hostMoveGuestCredits(const std::string &player, int delta) {
+    auto record = _guests.find(player);
+    if (!isHost() || record == _guests.end()) {
+        return 0;
+    }
+    int32_t before = record->second.credits;
+    int64_t after = std::clamp<int64_t>(static_cast<int64_t>(before) + delta, 0, kMaxGuestCredits);
+    record->second.credits = static_cast<int32_t>(after);
+    int moved = static_cast<int>(after - before);
+    info("Co-op: " + player + (moved >= 0 ? " gains " : " pays ") + std::to_string(std::abs(moved)) + " credits (companion Pazaak)");
+    return moved;
+}
+
 // Client
 
 std::filesystem::path CoopSession::guestPath() const {

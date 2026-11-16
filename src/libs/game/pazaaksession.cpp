@@ -553,7 +553,17 @@ ActionError PazaakSession::applyOpponentCommand(const Command &command) {
     if (_screen != PazaakFlowScreen::Board || !_match || terminal()) {
         return ActionError::MatchComplete;
     }
-    return applyAcceptedCommand(command);
+    ActionError error = applyAcceptedCommand(command);
+    if (error == ActionError::None) {
+        _opponentWaited = 0.0f;
+    }
+    return error;
+}
+
+void PazaakSession::setOpponentExternal(bool external, float fallbackSeconds) {
+    _opponentExternal = external;
+    _opponentFallbackSeconds = fallbackSeconds > 0.0f ? fallbackSeconds : 20.0f;
+    _opponentWaited = 0.0f;
 }
 
 void PazaakSession::beginResultPresentation() {
@@ -774,7 +784,7 @@ Command PazaakSession::chooseOpponentAction() const {
     return EndTurnCommand {Participant::Two};
 }
 
-PazaakOpponentEvent PazaakSession::advanceOpponentEvent() {
+PazaakOpponentEvent PazaakSession::advanceOpponentEvent(float stepSeconds) {
     if (_screen != PazaakFlowScreen::Board || !_match) {
         return PazaakOpponentEvent::None;
     }
@@ -804,7 +814,18 @@ PazaakOpponentEvent PazaakSession::advanceOpponentEvent() {
     if (set.turnStage() == TurnStage::AwaitingDraw) {
         event = PazaakOpponentEvent::Draw;
         error = applyAcceptedCommand(DrawCommand {Participant::Two});
+        _opponentWaited = 0.0f;
     } else if (set.turnStage() == TurnStage::AwaitingAction) {
+        if (_opponentExternal) {
+            // Played from outside: wait for its command, and play the turn
+            // with the built-in policy only when none has come in time.
+            _opponentWaited += std::max(0.0f, stepSeconds);
+            if (_opponentWaited < _opponentFallbackSeconds) {
+                return PazaakOpponentEvent::None;
+            }
+            _opponentWaited = 0.0f;
+            ++_opponentFallbacks;
+        }
         if (auto card = chooseOpponentHandCard()) {
             event = PazaakOpponentEvent::PlayHandCard;
             error = applyAcceptedCommand(*card);

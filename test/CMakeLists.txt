@@ -65,6 +65,7 @@ set(TESTS_SOURCES
     ${TESTS_SOURCE_DIR}/game/coopcast.cpp
     ${TESTS_SOURCE_DIR}/game/cooploot.cpp
     ${TESTS_SOURCE_DIR}/game/coopprompts.cpp
+    ${TESTS_SOURCE_DIR}/game/modmenu.cpp
     ${TESTS_SOURCE_DIR}/game/dedicated.cpp
     ${TESTS_SOURCE_DIR}/game/guestbenchscreen.cpp
     ${TESTS_SOURCE_DIR}/game/forkports.cpp

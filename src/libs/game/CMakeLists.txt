@@ -248,6 +248,8 @@ set(GAME_HEADERS
     ${GAME_INCLUDE_DIR}/gui/computercam.h
     ${GAME_INCLUDE_DIR}/gui/confirmpopup.h
     ${GAME_INCLUDE_DIR}/gui/coopmenu.h
+    ${GAME_INCLUDE_DIR}/gui/modmenu.h
+    ${GAME_INCLUDE_DIR}/modmenu.h
     ${GAME_INCLUDE_DIR}/gui/container.h
     ${GAME_INCLUDE_DIR}/gui/credits.h
     ${GAME_INCLUDE_DIR}/gui/optionspanels.h
@@ -606,6 +608,9 @@ set(GAME_SOURCES
     ${GAME_SOURCE_DIR}/gui/computercam.cpp
     ${GAME_SOURCE_DIR}/gui/confirmpopup.cpp
     ${GAME_SOURCE_DIR}/gui/coopmenu.cpp
+    ${GAME_SOURCE_DIR}/gui/modmenu.cpp
+    ${GAME_SOURCE_DIR}/modmenu.cpp
+    ${GAME_SOURCE_DIR}/companionconsole.cpp
     ${GAME_SOURCE_DIR}/gui/container.cpp
     ${GAME_SOURCE_DIR}/gui/credits.cpp
     ${GAME_SOURCE_DIR}/gui/optionspanels.cpp

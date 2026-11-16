@@ -868,6 +868,7 @@ void Game::initConsole() {
     registerConsoleCommand("pazaakstand", "stand in the current Pazaak set", &Game::consolePazaakStand);
     registerConsoleCommand("pazaakforfeit", "forfeit the Pazaak match", &Game::consolePazaakForfeit);
     initCoopConsole();
+    initCompanionConsole();
 
     if (_options.game.developer) {
         registerConsoleCommand("minigameinfo", "print minigame metadata for current area", &Game::consoleMiniGameInfo);
@@ -1385,8 +1386,9 @@ void Game::tick(float dt) {
         } else if (_pazaakSession && !_pazaakSession->presentationPending()) {
             _pazaakOpponentEventElapsed += dt;
             if (_pazaakOpponentEventElapsed >= kPazaakOpponentEventDelay) {
+                float step = _pazaakOpponentEventElapsed;
                 _pazaakOpponentEventElapsed = 0.0f;
-                PazaakOpponentEvent event = _pazaakSession->advanceOpponentEvent();
+                PazaakOpponentEvent event = _pazaakSession->advanceOpponentEvent(step);
                 if (event != PazaakOpponentEvent::None) {
                     if (_pazaakBoard) {
                         _pazaakBoard->refresh();
@@ -6293,6 +6295,11 @@ void Game::finishPazaak(PazaakCompletedResult result) {
         // Co-op Free Mode: a guest's own game; its credits are the host's to settle.
         _coop->clientPazaakFinished(result == PazaakCompletedResult::PlayerWon, wager);
     }
+    if (!_pazaakCompanionGuest.empty() && !_pazaakSettlementApplied) {
+        // A game with a companion: the stake moves between the two purses.
+        settleCompanionPazaak(result, developmentLaunch ? 0 : wager);
+        _pazaakSettlementApplied = true;
+    }
     if (!developmentLaunch && !_pazaakSettlementApplied) {
         if (result == PazaakCompletedResult::PlayerWon) {
             _party.giveGold(wager);
@@ -6362,6 +6369,8 @@ void Game::releasePazaakFlow(bool restoreOrigin) {
     _pazaakSettlementApplied = false;
     _pazaakShowcaseHands = false;
     _pazaakOpponentEventElapsed = 0.0f;
+    _pazaakCompanionGuest.clear();
+    _pazaakCompanionBorrowed = false;
     if (restoreOrigin) {
         changeScreen(restore);
     }

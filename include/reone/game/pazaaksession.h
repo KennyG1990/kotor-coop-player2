@@ -195,7 +195,21 @@ public:
 
     // Explicit development seam for deterministic integration tests.
     pazaak::ActionError applyOpponentCommand(const pazaak::Command &command);
-    PazaakOpponentEvent advanceOpponentEvent();
+    /// stepSeconds: time since the last call. It only counts while the
+    /// opponent is played from outside (setOpponentExternal).
+    PazaakOpponentEvent advanceOpponentEvent(float stepSeconds = 0.0f);
+
+    /// An opponent played from outside (a companion program, through
+    /// applyOpponentCommand). While on, the opponent's draws are still forced,
+    /// but its action stage waits for an outside command; the built-in policy
+    /// plays that turn only after fallbackSeconds without one, so a match never
+    /// stalls. Off by default.
+    void setOpponentExternal(bool external, float fallbackSeconds = 20.0f);
+    bool opponentExternal() const { return _opponentExternal; }
+    /// Opponent turns the built-in policy played because no outside command came.
+    int opponentFallbacks() const { return _opponentFallbacks; }
+    /// Seconds the current opponent action stage has waited for an outside command.
+    float opponentWaited() const { return _opponentWaited; }
     bool advanceResultPresentation(float dt);
     std::vector<PazaakPresentationEvent> takePresentationEvents();
 
@@ -222,6 +236,10 @@ private:
     float _resultPresentationElapsed {0.0f};
     std::vector<PazaakPresentationEvent> _presentationEvents;
     std::optional<PazaakCompletedResult> _completedResult;
+    bool _opponentExternal {false};
+    float _opponentFallbackSeconds {20.0f};
+    float _opponentWaited {0.0f};
+    int _opponentFallbacks {0};
 
     static pazaak::HandSelection defaultHandSelection();
 

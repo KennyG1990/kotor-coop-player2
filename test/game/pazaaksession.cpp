@@ -665,3 +665,55 @@ TEST(PazaakFlowBoard, CompletedRulesMatchProducesSemanticPlayerWin) {
     EXPECT_EQ(MatchResult::ParticipantOneWon, session.match()->result());
     EXPECT_EQ(kSetWinsForMatch, session.match()->participant(Participant::One).setWins());
 }
+
+// An opponent played from outside (a companion program): its action stage
+// waits for an outside command, and the built-in policy plays only on timeout.
+TEST(PazaakFlowBoard, ExternalOpponentWaitsForItsCommandAndFallsBackOnTimeout) {
+    PazaakSession session(makeSession(
+        0,
+        0,
+        firstFour,
+        PazaakSession::temporaryK1TestCollection(),
+        firstFour,
+        []() { return makeMainDeck({8, 9, 7, 6}); },
+        [](size_t) { return Participant::Two; }));
+    chooseTen(session);
+    ASSERT_TRUE(session.confirmSetup());
+    session.setOpponentExternal(true, 5.0f);
+    ASSERT_TRUE(session.opponentExternal());
+
+    EXPECT_EQ(PazaakOpponentEvent::Draw, session.advanceOpponentEvent(0.45f));
+    ASSERT_EQ(TurnStage::AwaitingAction, session.match()->set().turnStage());
+    for (int i = 0; i < 10; ++i) {
+        EXPECT_EQ(PazaakOpponentEvent::None, session.advanceOpponentEvent(0.45f));
+    }
+    EXPECT_EQ(TurnStage::AwaitingAction, session.match()->set().turnStage());
+    EXPECT_EQ(Participant::Two, session.match()->set().activeParticipant());
+
+    // Its own command is taken, and resets the wait.
+    EXPECT_EQ(ActionError::InvalidParticipant, session.applyOpponentCommand(EndTurnCommand {Participant::One}));
+    ASSERT_EQ(ActionError::None, session.applyOpponentCommand(EndTurnCommand {Participant::Two}));
+    EXPECT_EQ(0.0f, session.opponentWaited());
+    EXPECT_EQ(0, session.opponentFallbacks());
+
+    // The player's draw and turn, then the opponent's next draw.
+    EXPECT_EQ(PazaakOpponentEvent::PlayerDraw, session.advanceOpponentEvent(0.45f));
+    ASSERT_EQ(ActionError::None, session.endPlayerTurn());
+    EXPECT_EQ(PazaakOpponentEvent::Draw, session.advanceOpponentEvent(0.45f));
+
+    // No command comes: after five seconds the built-in policy plays the turn.
+    int waits = 0;
+    PazaakOpponentEvent event = PazaakOpponentEvent::None;
+    while ((event = session.advanceOpponentEvent(0.45f)) == PazaakOpponentEvent::None && waits < 100) {
+        ++waits;
+    }
+    EXPECT_EQ(11, waits);
+    EXPECT_NE(PazaakOpponentEvent::None, event);
+    EXPECT_EQ(1, session.opponentFallbacks());
+}
+
+TEST(PazaakFlowBoard, BuiltInOpponentIsTheDefault) {
+    PazaakSession session(makeSession());
+    EXPECT_FALSE(session.opponentExternal());
+    EXPECT_EQ(0, session.opponentFallbacks());
+}

@@ -97,6 +97,7 @@
 #include "options.h"
 #include "party.h"
 #include "pazaaksession.h"
+#include "modmenu.h"
 #include "saveprovenance.h"
 #include "savegame.h"
 #include "script/runner.h"
@@ -302,6 +303,8 @@ public:
      */
     void setCoopSession(std::shared_ptr<CoopSession> session);
     CoopSession *coop() const { return _coop.get(); }
+    /** The settings screen a companion program puts into the in-game Options (modmenu); empty unless set. */
+    ModMenuModel &modMenu() { return _modMenu; }
     /** Shepard cameos (cameo.h). */
     CameoDirector &cameos() { return _cameos; }
     /** The co-op chat line the player types into, for the HUD to draw. */
@@ -1435,6 +1438,8 @@ private:
     void recordCoopState(float frameTime);
     void tickCoopClient(float dt);
     void initCoopConsole();
+    void initCompanionConsole();
+    void settleCompanionPazaak(PazaakCompletedResult result, int wager);
 
 public:
     float ambientRoomScale() const { return _ambientRoomScale; }
@@ -1672,6 +1677,11 @@ private:
     bool _pazaakSettlementApplied {false};
     bool _pazaakShowcaseHands {false};
     float _pazaakOpponentEventElapsed {0.0f};
+    // A game with a seated guest a companion program plays (companionpazaak).
+    std::string _pazaakCompanionGuest;
+    bool _pazaakCompanionBorrowed {false};
+    std::string _companionPazaakLast; // the last one's result, as JSON
+    ModMenuModel _modMenu;
 
     // Narrow injectable seams used by focused lifecycle tests.
     PazaakSession::HandSelector _pazaakPlayerHandSelector;

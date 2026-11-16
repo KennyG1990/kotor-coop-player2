@@ -484,6 +484,13 @@ public:
     bool hostTalkClick(const Creature &creature);
     /** Host test seam: a guest's credits. */
     bool setGuestCredits(uint32_t clientId, int credits);
+    /** Host, Free Mode: the player whose seated character is `guestId`, and that character's own credits. */
+    std::optional<std::pair<std::string, int>> hostGuestPurse(uint32_t guestId) const;
+    /**
+     * Host, Free Mode: add `delta` to a guest character's own credits (named by
+     * its player). A loss takes no more than it holds. Returns what was moved.
+     */
+    int hostMoveGuestCredits(const std::string &player, int delta);
     /** Host: every XP award the party gets goes to each guest too (design, "XP: mirrors the host"). */
     void onPartyXP(int amount);
     /** Client: the character this player brings (made with character generation, or loaded). Saved locally and sent. */

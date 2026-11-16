@@ -23,6 +23,7 @@
 
 #include "../../gui.h"
 #include "../coopmenu.h"
+#include "../modmenu.h"
 #include "../optionspanels.h"
 
 namespace reone {
@@ -46,7 +47,7 @@ public:
     bool handle(const input::Event &event) override;
     void update(float dt) override;
     void render() override;
-    bool coversMenuHost() const override { return (_panels.isOpen() || (_coop && _coop->isOpen())); }
+    bool coversMenuHost() const override { return (_panels.isOpen() || (_coop && _coop->isOpen()) || modMenuOpen()); }
 
     /** The sub-panels (Gameplay, Feedback, ...) opened over this page. */
     OptionsPanels &panels() { return _panels; }
@@ -55,6 +56,10 @@ public:
     void openCoop();
     void closeCoop();
     CoopMenu *coopMenu() { return _coop.get(); }
+
+    /** A companion program's settings screen (modmenu): its button shows only while one is set. */
+    void openModMenu();
+    bool modMenuOpen() const { return _modScreen && _modScreen->isOpen(); }
     PresentationGUI *inputPage() override { return _coop && _coop->isOpen() ? _coop->inputPage() : this; }
 
 private:
@@ -81,8 +86,13 @@ private:
     OptionsPanels _panels;
     std::unique_ptr<CoopMenu> _coop;
     std::shared_ptr<gui::Button> _coopButton;
+    std::unique_ptr<ModMenuScreen> _modScreen;
+    std::shared_ptr<gui::Button> _modButton;
+    std::string _modButtonText;
 
     void addCoopButton();
+    void addModButton();
+    void refreshModButton();
 
     void onGUILoaded() override;
 

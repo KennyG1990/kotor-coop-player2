@@ -65,6 +65,7 @@ void OptionsMenu::onGUILoaded() {
         _game.openInGame();
     });
     addCoopButton();
+    addModButton();
 
     // The option pages open over this one; their Close comes back here.
     struct Page {
@@ -149,6 +150,74 @@ void OptionsMenu::addCoopButton() {
     });
 }
 
+void OptionsMenu::addModButton() {
+    // A companion program's settings (modmenu): one more button, a copy of
+    // Quit a row below it (two rows on K2, whose Co-op button takes the first).
+    // Hidden until a program sets its screen.
+    auto gff = _presentationResources.gffs.get(_resRef, resource::ResType::Gui);
+    if (!gff) {
+        return;
+    }
+    auto parsed = resource::generated::parseGUI(*gff);
+    auto byTag = [&](const char *tag) {
+        return std::find_if(parsed.CONTROLS.begin(), parsed.CONTROLS.end(), [tag](const auto &c) { return c.TAG == tag; });
+    };
+    auto last = byTag("BTN_QUIT");
+    auto above = byTag("BTN_SOUND");
+    if (last == parsed.CONTROLS.end() || above == parsed.CONTROLS.end()) {
+        return;
+    }
+    auto copy = *last;
+    copy.TAG = "BTN_MODMENU";
+    int row = last->EXTENT.TOP - above->EXTENT.TOP;
+    copy.EXTENT.TOP = last->EXTENT.TOP + row * (isTSL() ? 2 : 1);
+    auto control = _gui->newControl(gui::ControlType::Button, copy.TAG);
+    if (!control) {
+        return;
+    }
+    control->load(copy);
+    _modButton = std::shared_ptr<Button>(static_cast<Button *>(control.release()));
+    _gui->addControlToFront(_modButton, gui::IGUI::ControlCoordinates::Authored);
+    if (isTSL()) {
+        enableK2ButtonBodyFill(_modButton);
+    }
+    _modButton->setOnClick([this]() {
+        openModMenu();
+    });
+    refreshModButton();
+}
+
+void OptionsMenu::refreshModButton() {
+    if (!_modButton) {
+        return;
+    }
+    const auto &model = _game.modMenu();
+    bool shown = model.active();
+    _modButton->setVisible(shown);
+    _modButton->setDisabled(!shown);
+    if (shown && model.spec().button != _modButtonText) {
+        _modButtonText = model.spec().button;
+        _modButton->setTextMessage(_modButtonText);
+    }
+}
+
+void OptionsMenu::openModMenu() {
+    if (!_game.modMenu().active()) {
+        return;
+    }
+    if (!_modScreen) {
+        auto screen = std::make_unique<ModMenuScreen>(_game, _services, _game.modMenu());
+        try {
+            screen->init();
+        } catch (const std::exception &e) {
+            warn(std::string("Companion settings page did not load: ") + e.what());
+            return;
+        }
+        _modScreen = std::move(screen);
+    }
+    _modScreen->open();
+}
+
 void OptionsMenu::openCoop() {
     if (!_coop) {
         auto menu = std::make_unique<CoopMenu>(_game, _services, CoopMenu::Place::InGame);
@@ -173,6 +242,9 @@ bool OptionsMenu::handle(const input::Event &event) {
     if (_coop && _coop->isOpen()) {
         return _coop->handle(event);
     }
+    if (modMenuOpen()) {
+        return _modScreen->handle(event);
+    }
     if (_panels.isOpen()) {
         _panels.handle(event);
         return true;
@@ -181,8 +253,13 @@ bool OptionsMenu::handle(const input::Event &event) {
 }
 
 void OptionsMenu::update(float dt) {
+    refreshModButton();
     if (_coop && _coop->isOpen()) {
         _coop->update(dt);
+        return;
+    }
+    if (modMenuOpen()) {
+        _modScreen->update(dt);
         return;
     }
     if (_panels.isOpen()) {
@@ -195,6 +272,10 @@ void OptionsMenu::update(float dt) {
 void OptionsMenu::render() {
     if (_coop && _coop->isOpen()) {
         _coop->render();
+        return;
+    }
+    if (modMenuOpen()) {
+        _modScreen->render();
         return;
     }
     if (_panels.isOpen()) {

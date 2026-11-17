@@ -67,4 +67,4 @@ UNSCRIPTED is **in active development** with **no public release yet.** Every fe
 
 **🌌 The Republic needs heroes. Your companion hasn't decided yet whether you're one. ✨**
 
-<sub>KotOR: Unscripted is an unofficial, non-commercial fan project built on KotOR Co-op and reone (GPL-3.0). It is not affiliated with, endorsed by or connected to Lucasfilm, Disney, BioWare, Aspyr or Electronic Arts. Star Wars, Knights of the Old Republic and related names are trademarks of their respective owners. You need your own copy of the game. Fan art made with Player2; the characters in it are original.</sub>
+<sub>KotOR: Unscripted is an unofficial, non-commercial fan project built on KotOR Co-op and reone (GPL-3.0). It is not affiliated with, endorsed by or connected to Lucasfilm, Disney, BioWare, Aspyr or Electronic Arts. Star Wars, Knights of the Old Republic and related names are trademarks of their respective owners. You need your own copy of the game. The characters in the fan art are original.</sub>

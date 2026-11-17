@@ -115,7 +115,7 @@ void Game::initCompanionConsole() {
         _console.printLine(boost::json::serialize(state));
     });
 
-    _console.registerCommand("companionpazaak", "co-op Free Mode host: a Pazaak game with a seated guest whose side a companion program plays: companionpazaak start <guest id> [stake] [deck row] | play <hand index> [plus|minus|+1|+2|-1|-2] | end | stand | state", [this](const ConsoleArgs &args) {
+    _console.registerCommand("companionpazaak", "co-op Free Mode host: a Pazaak game with a seated guest whose side a companion program plays: companionpazaak start <guest id> [stake] [deck row] | play <hand index> [plus|minus|+1|+2|-1|-2] | end | stand | builtin | state", [this](const ConsoleArgs &args) {
         std::string verb = args.size() > 1 ? boost::to_lower_copy(std::string(*args[1])) : "state";
         if (verb == "start") {
             auto id = args.get<uint32_t>(2);
@@ -167,7 +167,7 @@ void Game::initCompanionConsole() {
             _console.printLine(boost::json::serialize(started));
             return;
         }
-        bool ours = _pazaakSession && !_pazaakCompanionGuest.empty() && _pazaakSession->opponentExternal();
+        bool ours = _pazaakSession && !_pazaakCompanionGuest.empty();
         if (verb == "state") {
             boost::json::object state;
             state["active"] = ours;
@@ -184,6 +184,7 @@ void Game::initCompanionConsole() {
                 state["screen"] = session.screen() == PazaakFlowScreen::Wager ? "wager" : session.screen() == PazaakFlowScreen::Setup ? "setup" : "board";
                 state["wager"] = session.wager();
                 state["fallbacks"] = session.opponentFallbacks();
+                state["companionPlays"] = session.opponentExternal(); // false once handed to the game's own play
                 state["waited"] = session.opponentWaited();
                 if (session.screen() == PazaakFlowScreen::Board && session.match()) {
                     const auto &match = *session.match();
@@ -218,7 +219,7 @@ void Game::initCompanionConsole() {
                         cards.push_back(std::move(card));
                     }
                     companion["hand"] = std::move(cards);
-                    bool theirTurn = set.result() == pazaak::SetResult::InProgress &&
+                    bool theirTurn = session.opponentExternal() && set.result() == pazaak::SetResult::InProgress &&
                                      set.activeParticipant() == pazaak::Participant::Two &&
                                      set.turnStage() == pazaak::TurnStage::AwaitingAction;
                     state["player"] = std::move(player);
@@ -231,10 +232,20 @@ void Game::initCompanionConsole() {
             _console.printLine(boost::json::serialize(state));
             return;
         }
+        if (verb == "builtin") {
+            // The program cannot play on (out of calls or joules): the game's
+            // own opponent plays the rest of the match, with no wait.
+            if (!ours) {
+                throw std::runtime_error("companionpazaak: no companion game is running");
+            }
+            _pazaakSession->setOpponentExternal(false);
+            _console.printLine("companionpazaak builtin ok");
+            return;
+        }
         if (verb != "play" && verb != "end" && verb != "stand") {
             throw std::runtime_error("Usage: companionpazaak start <guest id> [stake] [deck row] | play <hand index> [plus|minus|+1|+2|-1|-2] | end | stand | state");
         }
-        if (!ours || _pazaakSession->screen() != PazaakFlowScreen::Board) {
+        if (!ours || !_pazaakSession->opponentExternal() || _pazaakSession->screen() != PazaakFlowScreen::Board) {
             throw std::runtime_error("companionpazaak: no companion game is on the board");
         }
         pazaak::ActionError error;

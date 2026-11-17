@@ -4,7 +4,7 @@
 
 **A companion who never read the script.** UNSCRIPTED puts a Player2-powered companion in
 your KotOR party: their own personality, their own words, their own memory, their own
-wants, a real partner in a fight and at the pazaak table. In development, no release yet.
+wants, and a real partner on every world. In development, no release yet.
 **[Read the full pitch →](docs/UNSCRIPTED.md)**
 
 This fork is the engine underneath it.

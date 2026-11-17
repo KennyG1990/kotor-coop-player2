@@ -3,8 +3,9 @@
 [![UNSCRIPTED](docs/art/unscripted-key-art.png)](docs/UNSCRIPTED.md)
 
 **A companion who never read the script.** UNSCRIPTED puts a Player2-powered companion in
-your KotOR party: their own personality, their own words, their own memory, their own
-wants, and a real partner on every world. In development, no release yet.
+your Knights of the Old Republic party, from the Endar Spire to Dantooine and beyond: their
+own personality, their own words, their own memory, their own wants, light side or dark
+watching what you do, and a real partner on every world. In development, no release yet.
 **[Read the full pitch →](docs/UNSCRIPTED.md)**
 
 This fork is the engine underneath it.

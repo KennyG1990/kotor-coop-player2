@@ -1,3 +1,16 @@
+# UNSCRIPTED: a Player2 companion for KotOR
+
+[![UNSCRIPTED](docs/art/unscripted-key-art.png)](docs/UNSCRIPTED.md)
+
+**A companion who never read the script.** UNSCRIPTED puts a Player2-powered companion in
+your KotOR party: their own personality, their own words, their own memory, their own
+wants, a real partner in a fight and at the pazaak table. In development, no release yet.
+**[Read the full pitch →](docs/UNSCRIPTED.md)**
+
+This fork is the engine underneath it.
+
+---
+
 # KotOR Co-op
 
 > **This is a modified fork** of [McChaffeeFAF/kotor-coop](https://github.com/McChaffeeFAF/kotor-coop)

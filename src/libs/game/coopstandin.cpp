@@ -434,6 +434,16 @@ std::string CoopSession::hostStandInPause() const {
             break; // a workbench's own talk before its screen
         }
         return "conversation";
+    case Game::Screen::PazaakWager:
+    case Game::Screen::PazaakSetup:
+    case Game::Screen::PazaakBoard:
+        // Fork addition: a game with a seated guest (companionpazaak) is the
+        // two of them at a table; the guest is not sent away from it. Any
+        // other Pazaak game holds guests as upstream does.
+        if (!_game._pazaakCompanionGuest.empty()) {
+            break;
+        }
+        return "screen";
     default:
         return "screen";
     }

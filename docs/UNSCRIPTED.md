@@ -1,8 +1,8 @@
-# 🌌 UNSCRIPTED
+# 🌌 KotOR: UNSCRIPTED
 
-### ⚡ *A Player2 companion for Star Wars: Knights of the Old Republic. Nobody wrote their lines.* ⚡
+### ⚡ *Knights of the Old Republic: Unscripted. A Player2 companion for Star Wars: Knights of the Old Republic. Nobody wrote their lines.* ⚡
 
-![UNSCRIPTED key art](art/unscripted-key-art.png)
+![KotOR: Unscripted key art](art/unscripted-key-art.png)
 
 ---
 
@@ -14,7 +14,7 @@ You've been here before. Twenty-plus years of replays. You know every companion'
 
 **What if one of them hadn't read the script?**
 
-**UNSCRIPTED** puts a brand-new companion in your party, powered by **Player2**. They walk the same campaign you do, from the Undercity of Taris to the plains of Dantooine and beyond, make up their own mind about what they see, and **answer you in their own words.** They aren't following you around. They're travelling with you.
+**KotOR: Unscripted** puts a brand-new companion in your party, powered by **Player2**. They walk the same campaign you do, from the Undercity of Taris to the plains of Dantooine and beyond, make up their own mind about what they see, and **answer you in their own words.** They aren't following you around. They're travelling with you.
 
 > 💬 **No dialogue trees. No canned lines. No fake spawns.**
 > Your companion plays with a real body, a real purse, real gear and the same rules as everyone else in the galaxy. If the game won't allow it, they can't do it.
@@ -67,4 +67,4 @@ UNSCRIPTED is **in active development** with **no public release yet.** Every fe
 
 **🌌 The Republic needs heroes. Your companion hasn't decided yet whether you're one. ✨**
 
-<sub>UNSCRIPTED is an unofficial, non-commercial fan project built on KotOR Co-op and reone (GPL-3.0). It is not affiliated with, endorsed by or connected to Lucasfilm, Disney, BioWare, Aspyr or Electronic Arts. Star Wars, Knights of the Old Republic and related names are trademarks of their respective owners. You need your own copy of the game. Fan art made with Player2; the characters in it are original.</sub>
+<sub>KotOR: Unscripted is an unofficial, non-commercial fan project built on KotOR Co-op and reone (GPL-3.0). It is not affiliated with, endorsed by or connected to Lucasfilm, Disney, BioWare, Aspyr or Electronic Arts. Star Wars, Knights of the Old Republic and related names are trademarks of their respective owners. You need your own copy of the game. Fan art made with Player2; the characters in it are original.</sub>

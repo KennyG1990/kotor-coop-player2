@@ -1,8 +1,10 @@
-# UNSCRIPTED: a Player2 companion for KotOR
+# KotOR: Unscripted
 
-[![UNSCRIPTED](docs/art/unscripted-key-art.png)](docs/UNSCRIPTED.md)
+*Knights of the Old Republic: Unscripted, a Player2 companion mod.*
 
-**A companion who never read the script.** UNSCRIPTED puts a Player2-powered companion in
+[![KotOR: Unscripted](docs/art/unscripted-key-art.png)](docs/UNSCRIPTED.md)
+
+**A companion who never read the script.** KotOR: Unscripted puts a Player2-powered companion in
 your Knights of the Old Republic party, from the Endar Spire to Dantooine and beyond: their
 own personality, their own words, their own memory, their own wants, light side or dark
 watching what you do, and a real partner on every world. In development, no release yet.

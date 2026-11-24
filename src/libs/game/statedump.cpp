@@ -45,6 +45,7 @@
 #include "reone/game/action/startconversation.h"
 #include "reone/game/action/usefeat.h"
 #include "reone/game/action/usetalentonobject.h"
+#include "reone/game/d20/class.h"
 #include "reone/game/d20/spell.h"
 #include "reone/game/object/item.h"
 #include "reone/game/combat.h"
@@ -833,6 +834,23 @@ void Game::consoleCompanionState(const ConsoleArgs &args) {
     if (auto player = _party.player()) {
         root["player"] = player->name();
         root["playerAlignment"] = player->goodEvil();
+        json::array classes;
+        for (const auto &[clazz, level] : player->attributes().classLevels()) {
+            if (clazz && level > 0) {
+                classes.push_back(json::object {{"id", static_cast<int>(clazz->type())}, {"name", clazz->name()}, {"level", level}});
+            }
+        }
+        root["playerClasses"] = std::move(classes);
+    }
+    if (_lastMiniGame.count > 0) {
+        root["minigame"] = json::object {
+            {"count", _lastMiniGame.count},
+            {"kind", _lastMiniGame.kind},
+            {"module", _lastMiniGame.module},
+            {"finished", _lastMiniGame.finished},
+            {"elapsed", _lastMiniGame.elapsed},
+            {"outcome", _lastMiniGame.outcome},
+        };
     }
     // The newest lines of the game's own dialog log (the Messages screen): what was said
     // in conversations, the player's chosen lines among them, each as "Speaker: text".

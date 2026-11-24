@@ -270,6 +270,7 @@ void Item::loadAmmunitionType() {
 void Item::clone(const Item &from) {
     // Object
     _tag = from._tag;
+    _blueprintResRef = from._blueprintResRef;
     _name = from._name;
     // END Object
 

@@ -138,6 +138,7 @@ struct CoopOwnSheetState {
     int force {0};
     int maxForce {0};
     int xp {0};
+    bool stealthed {false};
 };
 std::string coopOwnSheetJson(const IFeats &feats, const ISpells &spells, const CreatureAttributes &attributes,
                              const CoopOwnSheetState &state);

@@ -6054,3 +6054,23 @@ TEST_F(CoopNetTest, a_client_s_level_up_icon_is_the_host_s_word) {
     copy->setXP(0);
     EXPECT_TRUE(copy->isLevelUpPending()) << "its own numbers do not count";
 }
+
+TEST_F(CoopCastSessionTest, item_clone_preserves_blueprint_resref_and_sheet_reports_stealth) {
+    auto original = _game->newItemFromBlueprint("g_w_blstrpstl001");
+    ASSERT_NE(nullptr, original);
+    ASSERT_EQ("g_w_blstrpstl001", original->blueprintResRef());
+    auto cloned = _game->newItemClone(*original);
+    ASSERT_NE(nullptr, cloned);
+    EXPECT_EQ("g_w_blstrpstl001", cloned->blueprintResRef());
+
+    CoopOwnSheetState unstealthed;
+    unstealthed.stealthed = false;
+    auto plainJson = coopOwnSheetJson(_game->services().game.feats, _game->services().game.spells, _player->attributes(), unstealthed);
+    EXPECT_NE(std::string::npos, plainJson.find("\"stealthed\":false"));
+
+    CoopOwnSheetState cloaked;
+    cloaked.stealthed = true;
+    auto cloakedJson = coopOwnSheetJson(_game->services().game.feats, _game->services().game.spells, _player->attributes(), cloaked);
+    EXPECT_NE(std::string::npos, cloakedJson.find("\"stealthed\":true"));
+}
+

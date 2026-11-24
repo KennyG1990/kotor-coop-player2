@@ -644,6 +644,7 @@ std::string coopOwnSheetJson(const IFeats &feats, const ISpells &spells, const C
     root["force"] = state.force;
     root["maxForce"] = state.maxForce;
     root["xp"] = state.xp;
+    root["stealthed"] = state.stealthed;
     return json::serialize(root);
 }
 

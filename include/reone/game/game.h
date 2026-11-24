@@ -1410,6 +1410,14 @@ private:
     bool _miniGameReplica {false};
     bool _instantDoorTransitions {false};
     std::string _miniGameModule;
+    struct LastMiniGameState {
+        uint32_t count {0};
+        std::string kind;
+        std::string module;
+        bool finished {false};
+        float elapsed {0.0f};
+        std::string outcome;
+    } _lastMiniGame;
 
     std::shared_ptr<movie::IMovie> _movie;
     std::queue<std::string> _moduleTransitionMovies;

@@ -502,6 +502,7 @@ public:
     bool clientStoreSell(uint32_t localItemId);
     bool clientStoreClosed();
     bool clientStoreOpen() const { return isClient() && _storeView.store != 0 && _storeView.open; }
+    const net::StoreView &storeView() const { return _storeView; }
     /** Client: the workbench or lab screen's buttons for a guest's bench. True when a request went out. */
     bool clientBenchOpen() const { return isClient() && _benchView.bench != 0 && _benchView.open; }
     const net::BenchView &benchView() const { return _benchView; }

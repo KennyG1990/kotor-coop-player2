@@ -19,6 +19,7 @@
 #include "reone/game/d20/class.h"
 #include "reone/game/d20/classes.h"
 #include "reone/game/d20/feats.h"
+#include "reone/game/d20/prestige.h"
 #include "reone/game/d20/skills.h"
 #include "reone/game/d20/spells.h"
 #include "reone/game/coopsession.h"
@@ -496,8 +497,27 @@ void Game::initCoopConsole() {
         net::Command command;
         command.type = net::CommandType::UseSkill;
         command.param = skill->second;
-        command.target = target(args, 2);
+        std::string rawTarget(*args[2]);
+        uint32_t resolved = clientSession().resolveHostId(rawTarget);
+        if (!resolved && !rawTarget.empty() && rawTarget.size() <= 9 &&
+            std::all_of(rawTarget.begin(), rawTarget.end(), [](unsigned char c) { return std::isdigit(c) != 0; })) {
+            // Detected floor-mine Triggers are host-validated (coopcommand.cpp:407) without being in _replicas.
+            resolved = static_cast<uint32_t>(std::stoul(rawTarget));
+        }
+        command.target = resolved ? resolved : target(args, 2);
         submit(command, "use_skill");
+    });
+    _console.registerCommand("coopstealth", "co-op client: enter or leave stealth mode: coopstealth [1|0]", [=](const ConsoleArgs &args) {
+        if (args.size() > 2) {
+            throw std::runtime_error("Usage: coopstealth [1|0]");
+        }
+        auto &session = clientSession();
+        auto member = std::dynamic_pointer_cast<Creature>(session.localObjectForHost(session.controlledHostId()));
+        bool on = args.size() < 2 ? !(member && member->isStealthed()) : args[1].value() != "0";
+        net::Command command;
+        command.type = net::CommandType::Stealth;
+        command.param = on ? 1 : 0;
+        submit(command, "stealth");
     });
     auto anySession = [this]() -> CoopSession & {
         if (!_coop) {
@@ -887,7 +907,10 @@ void Game::initCoopConsole() {
     });
     // Self-directed level-ups (fork addition): a guest seat driven from outside reads what it
     // may take and sends its own choice. The host judges it exactly as it judges the screens'.
-    _console.registerCommand("cooplevelupoptions", "co-op client: what the controlled character may choose at its next level, as one line of JSON", [=](const ConsoleArgs &) {
+    _console.registerCommand("cooplevelupoptions", "co-op client: what the controlled character may choose at its next level, as one line of JSON: cooplevelupoptions [class id]", [=](const ConsoleArgs &args) {
+        if (args.size() > 2) {
+            throw std::runtime_error("Usage: cooplevelupoptions [class id]");
+        }
         auto &session = clientSession();
         auto member = std::dynamic_pointer_cast<Creature>(session.localObjectForHost(session.controlledHostId()));
         if (!member) {
@@ -896,16 +919,33 @@ void Game::initCoopConsole() {
         if (!session.clientMayLevelUp()) {
             throw std::runtime_error("no level-up allowed now");
         }
+        ClassType targetClass = member->attributes().getEffectiveClass();
+        if (args.size() == 2) {
+            auto wanted = args.get<int>(1);
+            if (!wanted || *wanted < 0 || *wanted > static_cast<int>(ClassType::SithAssassin)) {
+                throw std::runtime_error("invalid class id");
+            }
+            targetClass = static_cast<ClassType>(*wanted);
+        }
         std::shared_ptr<CreatureClass> clazz;
         try {
-            clazz = _services.game.classes.get(member->attributes().getEffectiveClass());
+            clazz = _services.game.classes.get(targetClass);
         } catch (const std::exception &) {
             clazz.reset();
         }
         if (!clazz) {
             throw std::runtime_error("the character's class did not load");
         }
-        auto options = coopLevelUpOptions(_services.game.feats, _services.game.spells, *clazz, member->attributes(), member->goodEvil() < 50);
+        CreatureAttributes attrs(member->attributes());
+        if (clazz->type() != attrs.getEffectiveClass()) {
+            bool added = prestige::isPrestigeClass(clazz->type())
+                             ? attrs.addPrestigeClass(clazz.get())
+                             : (attrs.classLevels().size() < 2 && attrs.addMultiClass(clazz.get()));
+            if (!added) {
+                throw std::runtime_error("cannot take that class now");
+            }
+        }
+        auto options = coopLevelUpOptions(_services.game.feats, _services.game.spells, *clazz, attrs, member->goodEvil() < 50);
         _console.printLine(coopLevelUpOptionsJson(options));
     });
     // The game's own tables behind a fighter's choices (fork addition), for a seat driven from outside: which
@@ -1018,6 +1058,7 @@ void Game::initCoopConsole() {
         state.force = member->currentForce();
         state.maxForce = member->maxForcePoints();
         state.xp = member->xp();
+        state.stealthed = member->isStealthed();
         _console.printLine(coopOwnSheetJson(_services.game.feats, _services.game.spells, member->attributes(), state));
     });
     _console.registerCommand("cooplevelupchoose", "co-op client: ask the host for the next level with these choices, checked by the host against the game's rules: cooplevelupchoose c<class>|a<ability>|s<skill>:<ranks>,...|f<feat>,...|p<power>,...", [=](const ConsoleArgs &args) {
@@ -1203,6 +1244,50 @@ void Game::initCoopConsole() {
         }
         auto result = _storeSession.sell(item);
         _console.printLine(std::string("coop sell ") + StoreSession::describe(result));
+    });
+    _console.registerCommand("coopstore", "co-op client: read-only JSON of the open store's credits, localized stock and sellable bag", [=](const ConsoleArgs &) {
+        namespace json = boost::json;
+        auto &session = clientSession();
+        json::object root;
+        bool open = session.clientStoreOpen();
+        root["open"] = open;
+        root["credits"] = open ? session.storeView().credits : 0;
+        auto describeStoreItem = [this](const Item &item, int price) {
+            json::object entry;
+            entry["tpl"] = item.blueprintResRef();
+            entry["tag"] = item.tag();
+            entry["name"] = item.localizedName();
+            entry["description"] = coopCutText(item.descIdentified().empty() ? item.description() : item.descIdentified(), 200);
+            entry["price"] = price;
+            entry["stack"] = item.stackSize();
+            if (auto type = item.activateSpell()) {
+                if (auto spell = _services.game.spells.get(*type)) {
+                    entry["use"] = spell->hostile ? "attack" : (spell->itemTargeting ? "guard" : "heal");
+                }
+            }
+            return entry;
+        };
+        json::array stock;
+        json::array sellable;
+        if (open) {
+            for (const auto &item : _storeSession.stock()) {
+                if (item && stock.size() < 60) {
+                    stock.push_back(describeStoreItem(*item, _storeSession.buyPrice(*item)));
+                }
+            }
+            for (const auto &item : _storeSession.sellable()) {
+                if (!item || sellable.size() >= 60) {
+                    continue;
+                }
+                if (session.freeMode() && !session.clientHostItemId(item->id())) {
+                    continue;
+                }
+                sellable.push_back(describeStoreItem(*item, _storeSession.sellPrice(*item)));
+            }
+        }
+        root["stock"] = std::move(stock);
+        root["sellable"] = std::move(sellable);
+        _console.printLine(json::serialize(root));
     });
     _console.registerCommand("coopbench", "co-op client: drive the workbench or lab screen as its buttons do: coopbench [state|item <template>|slot <n>|install <part template>|remove <slot>|assemble|craft <template>|break <template>|close|send remove|upgrade <item> <n>]", [=](const ConsoleArgs &args) {
         auto &session = clientSession();

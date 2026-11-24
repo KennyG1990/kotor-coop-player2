@@ -5460,6 +5460,16 @@ void Game::endMiniGame() {
     if (!_miniGame) {
         return;
     }
+    if (!_miniGameReplica) {
+        auto *mgPlayer = _miniGame->player();
+        ++_lastMiniGame.count;
+        _lastMiniGame.kind = _miniGame->type() == MinigameType::Turret ? "turret" : "swoop";
+        _lastMiniGame.module = _miniGameModule;
+        _lastMiniGame.finished = _miniGame->tickCount() > 0 && !(mgPlayer && mgPlayer->dead);
+        _lastMiniGame.elapsed = _miniGame->elapsed();
+        _lastMiniGame.outcome = _turret.isActive() ? turretOutcomeName(_turret.outcome())
+                                                   : (_lastMiniGame.finished ? "finished" : "crashed");
+    }
     if (_coop) {
         _coop->onMiniGameEnded(*_miniGame);
     }

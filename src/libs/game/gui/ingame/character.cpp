@@ -240,6 +240,13 @@ void CharacterMenu::refreshControls() {
                 ? _subjectView.subjectName + " - " + _defaultTitleText
                 : _defaultTitleText);
     }
+    if (_controls.LBL_NAME) {
+        std::string display = !_subjectView.subjectName.empty() ? _subjectView.subjectName : subject->name();
+        if (!display.empty()) {
+            _controls.LBL_NAME->setTextMessage(
+                _subjectView.isGuestSubject ? display + " - Character" : display);
+        }
+    }
     CreatureAttributes &attributes = subject->attributes();
 
     if (!isTSL()) {

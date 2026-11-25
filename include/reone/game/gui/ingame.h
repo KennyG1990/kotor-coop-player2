@@ -30,6 +30,7 @@
 #include "ingame/character.h"
 #include "ingame/equip.h"
 #include "ingame/inventory.h"
+#include "ingame/itembacking.h"
 #include "ingame/journal.h"
 #include "ingame/map.h"
 #include "ingame/messages.h"
@@ -76,6 +77,7 @@ public:
 
 private:
     std::unique_ptr<InGameMenuHost> _host;
+    SharedItemMenuBacking _sharedItems;
     std::shared_ptr<CharacterMenu> _character;
     std::shared_ptr<Equipment> _equip;
     std::shared_ptr<InventoryMenu> _inventory;

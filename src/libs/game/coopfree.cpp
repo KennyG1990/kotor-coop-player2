@@ -1185,10 +1185,12 @@ bool handOverOne(Game &game, const std::shared_ptr<Item> &item, Object &receiver
     if (item->stackSize() <= 1) {
         return transferItemTo(game, item, receiver);
     }
-    auto made = receiver.addItem(item->blueprintResRef(), 1, item->isDropable());
-    if (!made) {
+    auto cloned = game.newItemClone(*item);
+    if (!cloned) {
         return false;
     }
+    cloned->setStackSize(1);
+    receiver.addItem(cloned);
     item->setStackSize(item->stackSize() - 1);
     return true;
 }
@@ -1273,6 +1275,144 @@ std::string CoopSession::hostTakeFromGuest(const std::string &who, const std::st
         return "";
     }
     return "no such player";
+}
+
+bool CoopSession::hostSetPackManageable(const std::string &who, bool on) {
+    if (!isHost() || !freeMode()) {
+        return false;
+    }
+    for (auto &[connection, client] : _clients) {
+        if (!boost::iequals(client.name, who) && std::to_string(client.clientId) != who) {
+            continue;
+        }
+        client.packManageable = on;
+        return true;
+    }
+    return false;
+}
+
+std::vector<std::shared_ptr<Creature>> CoopSession::packManageableGuests() const {
+    std::vector<std::shared_ptr<Creature>> result;
+    if (!isHost() || !freeMode()) {
+        return result;
+    }
+    std::vector<const HostClient *> ordered;
+    for (const auto &[connection, client] : _clients) {
+        if (client.welcomed && client.packManageable && client.guestId != 0) {
+            ordered.push_back(&client);
+        }
+    }
+    std::sort(ordered.begin(), ordered.end(), [](const HostClient *a, const HostClient *b) {
+        return a->clientId < b->clientId;
+    });
+    for (const HostClient *client : ordered) {
+        auto creature = _game.getObjectById<Creature>(client->guestId);
+        if (creature && creature->isRuntimeLive() && !creature->isDead()) {
+            result.push_back(std::move(creature));
+        }
+    }
+    return result;
+}
+
+bool CoopSession::isPackManageableGuest(uint32_t creatureId, std::string *guestPlayerName) const {
+    if (!isHost() || !freeMode() || creatureId == 0) {
+        return false;
+    }
+    for (const auto &[connection, client] : _clients) {
+        if (client.welcomed && client.packManageable && client.guestId == creatureId) {
+            if (guestPlayerName) {
+                *guestPlayerName = client.name;
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
+bool CoopSession::hostTransferMenuItem(uint32_t guestCreatureId, const std::shared_ptr<Item> &item, bool toGuest) {
+    if (!isHost() || !freeMode() || !item || item->isEquipped() || item->isCredits()) {
+        return false;
+    }
+    if (toGuest && item->plotFlag()) {
+        return false;
+    }
+    auto player = _game.party().actualPlayer();
+    if (!player || !player->isRuntimeLive()) {
+        return false;
+    }
+    for (auto &[connection, client] : _clients) {
+        if (!client.welcomed || !client.packManageable || client.guestId != guestCreatureId) {
+            continue;
+        }
+        auto guest = _game.getObjectById<Creature>(client.guestId);
+        if (!guest || !guest->isRuntimeLive() || guest->isDead()) {
+            return false;
+        }
+        Object &source = toGuest ? static_cast<Object &>(*player) : static_cast<Object &>(*guest);
+        Object &dest = toGuest ? static_cast<Object &>(*guest) : static_cast<Object &>(*player);
+        const auto &srcItems = source.items();
+        if (std::find(srcItems.begin(), srcItems.end(), item) == srcItems.end()) {
+            return false;
+        }
+        std::string tpl = item->blueprintResRef();
+        std::string name = item->localizedName();
+        if (!handOverOne(_game, item, dest)) {
+            return false;
+        }
+        hostSendGuestInventory(client);
+        if (_hostPackEvents.size() >= 64) {
+            _hostPackEvents.pop_front();
+        }
+        _hostPackEvents.push_back(HostPackEvent {client.name, toGuest ? "gave" : "took", std::move(tpl), std::move(name), -1});
+        return true;
+    }
+    return false;
+}
+
+bool CoopSession::hostRecordGuestEquipChange(uint32_t guestCreatureId, int slot,
+                                             const std::shared_ptr<Item> &beforeItem,
+                                             const std::shared_ptr<Item> &afterItem) {
+    if (!isHost() || !freeMode() || beforeItem == afterItem) {
+        return false;
+    }
+    for (auto &[connection, client] : _clients) {
+        if (!client.welcomed || !client.packManageable || client.guestId != guestCreatureId) {
+            continue;
+        }
+        client.sheetSent.clear();
+        hostSendGuestInventory(client);
+        if (_hostPackEvents.size() >= 64) {
+            _hostPackEvents.pop_front();
+        }
+        if (afterItem) {
+            _hostPackEvents.push_back(HostPackEvent {
+                client.name, "equipped", afterItem->blueprintResRef(), afterItem->localizedName(), slot});
+        } else if (beforeItem) {
+            _hostPackEvents.push_back(HostPackEvent {
+                client.name, "unequipped", beforeItem->blueprintResRef(), beforeItem->localizedName(), slot});
+        }
+        return true;
+    }
+    return false;
+}
+
+std::vector<CoopSession::HostPackEvent> CoopSession::takeHostPackEvents(const std::string &who) {
+    std::vector<HostPackEvent> out;
+    if (who.empty()) {
+        out.assign(_hostPackEvents.begin(), _hostPackEvents.end());
+        _hostPackEvents.clear();
+        return out;
+    }
+    std::deque<HostPackEvent> kept;
+    for (auto &ev : _hostPackEvents) {
+        if (boost::iequals(ev.guest, who)) {
+            out.push_back(std::move(ev));
+        } else {
+            kept.push_back(std::move(ev));
+        }
+    }
+    _hostPackEvents = std::move(kept);
+    return out;
 }
 
 bool CoopSession::hostSetTalkable(const std::string &who, bool on) {

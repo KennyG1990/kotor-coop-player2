@@ -118,11 +118,24 @@ void Equipment::onGUILoaded() {
         _btnInv[slotName.first] = findControl<Button>("BTN_INV_" + slotName.second);
     }
 
+    if (_controls.LBL_TITLE) {
+        _defaultTitleText = _controls.LBL_TITLE->text().text;
+    }
     if (_controls.BTN_CHANGE1) {
         _controls.BTN_CHANGE1->setSelectable(false);
+        _controls.BTN_CHANGE1->setOnClick([this]() {
+            if (_backing && _backing->selectPortrait(1)) {
+                update();
+            }
+        });
     }
     if (_controls.BTN_CHANGE2) {
         _controls.BTN_CHANGE2->setSelectable(false);
+        _controls.BTN_CHANGE2->setOnClick([this]() {
+            if (_backing && _backing->selectPortrait(2)) {
+                update();
+            }
+        });
     }
     if (isTSL()) {
         useK2ShellTitle(_controls.LBL_TITLE);
@@ -394,6 +407,12 @@ void Equipment::update() {
     updateEquipment();
     updatePortraits();
     selectSlot(Slot::None);
+    if (_controls.LBL_TITLE && !_defaultTitleText.empty()) {
+        _controls.LBL_TITLE->setTextMessage(
+            _view.subject.isGuestSubject && !_view.subject.subjectName.empty()
+                ? _view.subject.subjectName + " - " + _defaultTitleText
+                : _defaultTitleText);
+    }
     if (!isTSL()) _controls.LBL_VITALITY->setTextMessage(_view.subject.vitality);
     _controls.LBL_DEF->setTextMessage(_view.subject.defense);
 }
@@ -411,9 +430,21 @@ void Equipment::openItems() {
 
 void Equipment::updatePortraits() {
     if (isTSL()) return;
-    _controls.LBL_PORTRAIT->setBorderFill(_view.subject.portraits[0]);
-    _controls.BTN_CHANGE1->setBorderFill(_view.subject.portraits[1]);
-    _controls.BTN_CHANGE2->setBorderFill(_view.subject.portraits[2]);
+    if (_controls.LBL_PORTRAIT) {
+        _controls.LBL_PORTRAIT->setBorderFill(_view.subject.portraits[0]);
+    }
+    if (_controls.BTN_CHANGE1) {
+        bool ok = _view.subject.portraitSelectable[1] && _view.subject.portraits[1] != nullptr;
+        _controls.BTN_CHANGE1->setBorderFill(_view.subject.portraits[1]);
+        _controls.BTN_CHANGE1->setHilightFill(_view.subject.portraits[1]);
+        _controls.BTN_CHANGE1->setSelectable(ok);
+    }
+    if (_controls.BTN_CHANGE2) {
+        bool ok = _view.subject.portraitSelectable[2] && _view.subject.portraits[2] != nullptr;
+        _controls.BTN_CHANGE2->setBorderFill(_view.subject.portraits[2]);
+        _controls.BTN_CHANGE2->setHilightFill(_view.subject.portraits[2]);
+        _controls.BTN_CHANGE2->setSelectable(ok);
+    }
 }
 
 void Equipment::selectSlot(Slot slot) {
@@ -437,6 +468,8 @@ void Equipment::selectSlot(Slot slot) {
         _controls.LBL_PORT_BORD->setVisible(noneSelected);
         _controls.LBL_PORTRAIT->setVisible(noneSelected);
         _controls.LBL_TXTBAR->setVisible(noneSelected);
+        if (_controls.BTN_CHANGE1) _controls.BTN_CHANGE1->setVisible(noneSelected);
+        if (_controls.BTN_CHANGE2) _controls.BTN_CHANGE2->setVisible(noneSelected);
     }
     _selectedSlot = slot;
 

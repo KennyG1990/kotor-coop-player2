@@ -473,6 +473,22 @@ public:
      */
     std::string hostGiveToGuest(const std::string &who, const std::string &which);
     std::string hostTakeFromGuest(const std::string &who, const std::string &which);
+    struct HostPackEvent {
+        std::string guest;
+        std::string kind;
+        std::string tpl;
+        std::string name;
+        int slot {-1};
+    };
+    /** Host (fork addition): opt a guest seat into the host's native Inventory / Equipment portrait & transfer UI. */
+    bool hostSetPackManageable(const std::string &who, bool on);
+    std::vector<std::shared_ptr<Creature>> packManageableGuests() const;
+    bool isPackManageableGuest(uint32_t creatureId, std::string *guestPlayerName = nullptr) const;
+    bool hostTransferMenuItem(uint32_t guestCreatureId, const std::shared_ptr<Item> &item, bool toGuest);
+    bool hostRecordGuestEquipChange(uint32_t guestCreatureId, int slot,
+                                    const std::shared_ptr<Item> &beforeItem,
+                                    const std::shared_ptr<Item> &afterItem);
+    std::vector<HostPackEvent> takeHostPackEvents(const std::string &who = std::string());
     /**
      * Host (fork addition): mark a guest as one the host talks to by clicking their
      * character, as with a party member. Off for every guest unless set; a program
@@ -673,6 +689,7 @@ private:
         uint32_t guestId {0};
         // Fork addition: the host talks to this guest by clicking their character; how often they have.
         bool talkable {false};
+        bool packManageable {false};
         uint32_t talkRequests {0};
         uint32_t storeOpen {0};
         std::vector<uint8_t> storeSent;
@@ -818,6 +835,7 @@ private:
         std::chrono::steady_clock::time_point since;
     };
     HeldConversation _heldConversation;
+    std::deque<HostPackEvent> _hostPackEvents;
     bool _releasingConversation {false};
     uint64_t _conversationsHeld {0};
     std::chrono::steady_clock::time_point _moduleChangedAt;

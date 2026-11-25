@@ -157,6 +157,7 @@ private:
     EquipmentView _view;
     std::vector<MenuItemView> _listedItems;
     std::optional<uint64_t> _awaitingRevision;
+    std::string _defaultTitleText;
 
     void receiveEquipmentResult();
 

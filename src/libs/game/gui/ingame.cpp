@@ -45,6 +45,7 @@ void InGameMenu::init() {
     _host = std::make_unique<InGameMenuHost>(_gameId, _game.options().graphics,
         _presentation, [this](InGameMenuTab tab) { navigate(tab); }, [this]() { return footer(); });
     _host->init();
+    _sharedItems = newSharedItemMenuBacking(_game, _services);
     loadEquipment();
     loadInventory();
     loadCharacter();
@@ -58,23 +59,27 @@ void InGameMenu::init() {
 
 void InGameMenu::loadEquipment() {
     _equip = std::make_shared<Equipment>(_gameId, _game.options().graphics,
-        _presentation, _services.resource.strings, newEquipmentMenuBacking(_game, _services),
-        [this]() { _game.openInGame(); });
+        _presentation, _services.resource.strings, _sharedItems.equipment,
+        [this]() {
+            if (_sharedItems.equipment) _sharedItems.equipment->resetInspectedSubject();
+            _game.openInGame();
+        });
     _equip->setOnSwapWeapons([this]() {
         // equip_p's Swap Weapons. Out of combat the swap is what the switch
         // action does on its first step, done now so the screen shows it; in
         // combat it queues, as the HUD's swap does; a co-op client asks the
         // host with the HUD's request.
-        auto leader = _game.party().getLeader();
-        if (!leader || leader->isDead() || _game.isConversationActive()) {
+        uint32_t subjId = _sharedItems.equipment ? _sharedItems.equipment->activeSubjectId() : 0;
+        auto subject = subjId ? _game.getObjectById<Creature>(subjId) : _game.party().getLeader();
+        if (!subject || subject->isDead() || _game.isConversationActive()) {
             return false;
         }
         auto *coop = _game.coop();
-        if ((coop && coop->isClient()) || leader->isInCombat()) {
-            requestWeaponSwitch(_game, *leader);
+        if ((coop && coop->isClient()) || subject->isInCombat()) {
+            requestWeaponSwitch(_game, *subject);
             return false;
         }
-        return leader->swapWeaponSets();
+        return subject->swapWeaponSets();
     });
     _equip->init();
     _host->registerScreen(InGameMenuTab::Equipment, _equip);
@@ -82,8 +87,11 @@ void InGameMenu::loadEquipment() {
 
 void InGameMenu::loadInventory() {
     _inventory = std::make_shared<InventoryMenu>(_gameId, _game.options().graphics,
-        _presentation, newInventoryMenuBacking(_game, _services),
-        [this]() { _game.openInGame(); });
+        _presentation, _sharedItems.inventory,
+        [this]() {
+            if (_sharedItems.inventory) _sharedItems.inventory->resetInspectedSubject();
+            _game.openInGame();
+        });
     _inventory->init();
     _host->registerScreen(InGameMenuTab::Inventory, _inventory);
 }
@@ -188,7 +196,10 @@ void InGameMenu::openOptions() {
     _host->changeTab(InGameMenuTab::Options);
 }
 
-void InGameMenu::clearSelection() { if (_host) _host->clearSelection(); }
+void InGameMenu::clearSelection() {
+    if (_sharedItems.equipment) _sharedItems.equipment->resetInspectedSubject();
+    if (_host) _host->clearSelection();
+}
 
 bool InGameMenu::handle(const input::Event &event) { return _host->handle(event); }
 void InGameMenu::update(float dt) { _host->update(dt); }

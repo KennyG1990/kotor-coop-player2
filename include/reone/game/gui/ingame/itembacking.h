@@ -23,8 +23,14 @@ namespace reone::game {
 class Game;
 struct ServicesView;
 
-// The SP owner chooses the subject and inventory through current Party policy.
+struct SharedItemMenuBacking {
+    std::shared_ptr<IInventoryMenuBacking> inventory;
+    std::shared_ptr<IEquipmentMenuBacking> equipment;
+};
+
+// The SP owner chooses the subject and inventory through current Party policy (plus opted-in Free Mode companions).
 std::shared_ptr<IInventoryMenuBacking> newInventoryMenuBacking(Game &game, ServicesView &services);
 std::shared_ptr<IEquipmentMenuBacking> newEquipmentMenuBacking(Game &game, ServicesView &services);
+SharedItemMenuBacking newSharedItemMenuBacking(Game &game, ServicesView &services);
 
 } // namespace reone::game

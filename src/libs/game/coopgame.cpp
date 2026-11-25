@@ -796,6 +796,40 @@ void Game::initCoopConsole() {
         }
         _console.printLine("coop took " + std::string(*args[2]) + " back from " + std::string(*args[1]));
     });
+    _console.registerCommand("cooppackui", "co-op Free Mode host: opt a guest seat into native Inventory / Equipment portrait & transfer UI: cooppackui <player name|client id> [0|1]", [this](const ConsoleArgs &args) {
+        if (args.size() < 2 || args.size() > 3) {
+            throw std::runtime_error("Usage: cooppackui <player name|client id> [0|1]");
+        }
+        if (!_coop || !_coop->isHost()) {
+            throw std::runtime_error("only the host can configure companion pack UI");
+        }
+        bool on = args.size() < 3 || std::string(*args[2]) != "0";
+        if (!_coop->hostSetPackManageable(std::string(*args[1]), on)) {
+            throw std::runtime_error("no such player");
+        }
+        _console.printLine(std::string("cooppackui ") + std::string(*args[1]) + (on ? " 1" : " 0"));
+    });
+    _console.registerCommand("cooppackevents", "co-op Free Mode host: drain host Inventory / Equipment transfers and outfit edits for a guest as JSON: cooppackevents [player name]", [this](const ConsoleArgs &args) {
+        namespace json = boost::json;
+        if (!_coop || !_coop->isHost()) {
+            throw std::runtime_error("only the host records pack UI events");
+        }
+        std::string who = args.size() >= 2 ? std::string(*args[1]) : std::string();
+        auto events = _coop->takeHostPackEvents(who);
+        json::array arr;
+        for (const auto &ev : events) {
+            json::object obj;
+            obj["guest"] = ev.guest;
+            obj["kind"] = ev.kind;
+            obj["tpl"] = ev.tpl;
+            obj["name"] = ev.name;
+            obj["slot"] = ev.slot;
+            arr.push_back(std::move(obj));
+        }
+        json::object root;
+        root["events"] = std::move(arr);
+        _console.printLine(json::serialize(root));
+    });
     // A conversation driven from outside, on the game's own conversation screen (outsidedialog.h).
     _console.registerCommand("talkopen", "open or continue a conversation driven from outside: talkopen <object id of the one spoken to> <base64 of the JSON exchange>", [this](const ConsoleArgs &args) {
         auto id = args.get<uint32_t>(1);

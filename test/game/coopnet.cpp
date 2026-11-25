@@ -39,6 +39,7 @@
 #include "reone/game/coopreplication.h"
 #include "reone/game/companionbrain.h"
 #include "reone/game/coopsession.h"
+#include "reone/game/gui/ingame/itembacking.h"
 #include "reone/game/gui/conversation.h"
 #include "reone/game/guestbenchscreen.h"
 #include "reone/resource/dialog.h"
@@ -6073,4 +6074,128 @@ TEST_F(CoopCastSessionTest, item_clone_preserves_blueprint_resref_and_sheet_repo
     auto cloakedJson = coopOwnSheetJson(_game->services().game.feats, _game->services().game.spells, _player->attributes(), cloaked);
     EXPECT_NE(std::string::npos, cloakedJson.find("\"stealthed\":true"));
 }
+
+TEST_F(CoopFreeSessionTest, opted_in_guest_pack_and_equipment_are_manageable_from_shared_item_menu_backing) {
+    auto baseItems = std::shared_ptr<resource::TwoDA>(
+        resource::TwoDA::Builder()
+            .columns({"equipableslots", "itemclass", "itemtype", "storepanelsort", "weapontype"})
+            .row({"2", "armor", "6", "55", "0"})
+            .row({"0", "quest", "24", "85", "0"})
+            .build());
+    EXPECT_CALL(_engine.resourceModule().twoDas(), get("baseitems"))
+        .Times(AnyNumber())
+        .WillRepeatedly(Return(baseItems));
+
+    join(sampleGuest());
+    _client.inbox.clear();
+    tick();
+    uint32_t gid = guestId();
+    ASSERT_NE(0u, gid);
+    auto guest = _game->getObjectById<Creature>(gid);
+    ASSERT_NE(nullptr, guest);
+
+    // Human friend seats stay private by default: no portrait target and no transfer label.
+    EXPECT_TRUE(_session->packManageableGuests().empty());
+    auto shared = newSharedItemMenuBacking(*_game, _engine.services());
+    auto initialView = shared.inventory->readInventory(InventoryFilter::All);
+    EXPECT_TRUE(initialView.subject.transferActionLabel.empty());
+    EXPECT_FALSE(initialView.subject.portraitSelectable[1]);
+
+    // Opting in an AI companion seat exposes portrait 1 and Give/Take without adding to Party.
+    ASSERT_TRUE(_session->hostSetPackManageable("Alice", true));
+    ASSERT_EQ(1u, _session->packManageableGuests().size());
+    EXPECT_FALSE(_game->party().isMember(*guest));
+
+    auto armorRecord = resource::Gff::Builder()
+                           .field(resource::Gff::Field::newInt("BaseItem", 0))
+                           .field(resource::Gff::Field::newWord("StackSize", 2))
+                           .field(resource::Gff::Field::newCExoLocString("LocalizedName", -1, "Combat Suit"))
+                           .field(resource::Gff::Field::newResRef("TemplateResRef", "g_a_class4001"))
+                           .field(resource::Gff::Field::newCExoString("Tag", "g_a_class4001"))
+                           .build();
+    auto armor = _game->newItem();
+    armor->deserialize(*armorRecord, SerializedIdentityContext::templateResource());
+    _player->addItem(armor);
+
+    auto plotRecord = resource::Gff::Builder()
+                          .field(resource::Gff::Field::newInt("BaseItem", 1))
+                          .field(resource::Gff::Field::newWord("StackSize", 1))
+                          .field(resource::Gff::Field::newByte("Plot", 1))
+                          .field(resource::Gff::Field::newCExoLocString("LocalizedName", -1, "Star Map Fragment"))
+                          .field(resource::Gff::Field::newCExoString("Tag", "plot_map"))
+                          .build();
+    auto plotItem = _game->newItem();
+    plotItem->deserialize(*plotRecord, SerializedIdentityContext::templateResource());
+    _player->addItem(plotItem);
+
+    auto partyView = shared.inventory->readInventory(InventoryFilter::All);
+    EXPECT_EQ("Give to Alice", partyView.subject.transferActionLabel);
+    uint64_t armorHandle = 0;
+    uint64_t plotHandle = 0;
+    for (const auto &entry : partyView.items) {
+        if (entry.name == "Combat Suit") {
+            EXPECT_TRUE(entry.transferable);
+            armorHandle = entry.handle;
+        } else if (entry.name == "Star Map Fragment") {
+            EXPECT_FALSE(entry.transferable);
+            plotHandle = entry.handle;
+        }
+    }
+    ASSERT_NE(0u, armorHandle);
+    ASSERT_NE(0u, plotHandle);
+    EXPECT_FALSE(shared.inventory->transferItem(plotHandle));
+    ASSERT_TRUE(shared.inventory->transferItem(armorHandle));
+    EXPECT_EQ(1, armor->stackSize());
+
+    // Switch portrait 1 -> Alice's Pack & Equipment share the inspected subject.
+    ASSERT_TRUE(shared.inventory->selectPortrait(1));
+    auto guestPack = shared.inventory->readInventory(InventoryFilter::All);
+    EXPECT_TRUE(guestPack.subject.isGuestSubject);
+    EXPECT_EQ("Alice's Pack - ", guestPack.subject.customTitlePrefix);
+    EXPECT_EQ("Take to Party", guestPack.subject.transferActionLabel);
+    EXPECT_EQ("40", guestPack.subject.credits);
+
+    auto equipView = shared.equipment->readEquipment(InventorySlots::body);
+    EXPECT_TRUE(equipView.subject.isGuestSubject);
+    uint64_t guestArmorHandle = 0;
+    for (const auto &entry : equipView.items) {
+        if (entry.name == "Combat Suit") {
+            guestArmorHandle = entry.handle;
+        }
+    }
+    ASSERT_NE(0u, guestArmorHandle);
+    shared.equipment->equip(equipView.revision, guestArmorHandle, InventorySlots::body);
+    ASSERT_NE(nullptr, guest->getEquippedItem(InventorySlots::body));
+    EXPECT_EQ("Combat Suit", guest->getEquippedItem(InventorySlots::body)->localizedName());
+
+    // Unequipping ("undressing") via handle 0 removes the armor back into Alice's bag.
+    auto equippedView = shared.equipment->readEquipment(InventorySlots::body);
+    shared.equipment->equip(equippedView.revision, 0, InventorySlots::body);
+    EXPECT_EQ(nullptr, guest->getEquippedItem(InventorySlots::body));
+
+    // Take back to Party Inventory from Alice's Pack.
+    guestPack = shared.inventory->readInventory(InventoryFilter::All);
+    uint64_t returnHandle = 0;
+    for (const auto &entry : guestPack.items) {
+        if (entry.name == "Combat Suit" && !entry.equipped) {
+            EXPECT_TRUE(entry.transferable);
+            returnHandle = entry.handle;
+        }
+    }
+    ASSERT_NE(0u, returnHandle);
+    ASSERT_TRUE(shared.inventory->transferItem(returnHandle));
+
+    auto events = _session->takeHostPackEvents("Alice");
+    ASSERT_EQ(4u, events.size());
+    EXPECT_EQ("gave", events[0].kind);
+    EXPECT_EQ("equipped", events[1].kind);
+    EXPECT_EQ("unequipped", events[2].kind);
+    EXPECT_EQ("took", events[3].kind);
+    EXPECT_TRUE(_session->takeHostPackEvents("Alice").empty());
+
+    shared.equipment->resetInspectedSubject();
+    auto resetView = shared.inventory->readInventory(InventoryFilter::All);
+    EXPECT_FALSE(resetView.subject.isGuestSubject);
+}
+
 

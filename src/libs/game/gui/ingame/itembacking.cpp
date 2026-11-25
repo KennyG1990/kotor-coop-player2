@@ -28,6 +28,8 @@
 #include "reone/resource/2da.h"
 #include "reone/resource/provider/2das.h"
 
+#include <algorithm>
+
 using namespace reone::resource;
 namespace reone::game {
 namespace {
@@ -208,6 +210,74 @@ class ItemMenuBacking final : public IInventoryMenuBacking, public IEquipmentMen
 public:
     ItemMenuBacking(Game &game, ServicesView &services) : _game(game), _services(services) {}
 
+    void resetInspectedSubject() override {
+        _inspectedGuestId = 0;
+    }
+
+    uint32_t activeSubjectId() const override {
+        auto subject = _subject.resolve();
+        return subject ? subject->id() : 0;
+    }
+
+    bool selectPortrait(int slot) override {
+        if (slot < 1 || slot > 2) {
+            return false;
+        }
+        auto targets = buildPortraitTargets();
+        auto chosen = targets[slot];
+        if (!chosen || !chosen->isRuntimeLive()) {
+            return false;
+        }
+        auto *coop = _game.coop();
+        if (coop && coop->isPackManageableGuest(chosen->id())) {
+            _inspectedGuestId = chosen->id();
+            return true;
+        }
+        _inspectedGuestId = 0;
+        if (_game.party().isMember(*chosen) && _game.party().getLeader() != chosen) {
+            for (int tries = 0; tries < 3 && _game.party().getLeader() != chosen; ++tries) {
+                _game.party().switchLeader();
+            }
+        }
+        return true;
+    }
+
+    bool transferItem(uint64_t handle) override {
+        if (handle == 0) {
+            return false;
+        }
+        auto *coop = _game.coop();
+        if (!coop || !coop->isHost() || !coop->freeMode()) {
+            return false;
+        }
+        auto entry = _items.find(handle);
+        if (entry == _items.end()) {
+            return false;
+        }
+        auto item = entry->second.reference.resolve();
+        if (!item || !live(item) || item->stackSize() != entry->second.stackSize || item->isEquipped() || item->isCredits()) {
+            return false;
+        }
+        uint32_t targetGuestId = 0;
+        bool toGuest = false;
+        if (_inspectedGuestId != 0 && coop->isPackManageableGuest(_inspectedGuestId)) {
+            targetGuestId = _inspectedGuestId;
+            toGuest = false;
+        } else {
+            auto guests = coop->packManageableGuests();
+            if (!guests.empty() && guests[0]) {
+                targetGuestId = guests[0]->id();
+                toGuest = true;
+            }
+        }
+        if (targetGuestId == 0 || (toGuest && item->plotFlag())) {
+            return false;
+        }
+        ++_revision;
+        _items.clear();
+        return coop->hostTransferMenuItem(targetGuestId, item, toGuest);
+    }
+
     InventoryView readInventory(InventoryFilter filter) override {
         bindSubject();
         InventoryView view;
@@ -216,18 +286,24 @@ public:
         auto subject = _subject.resolve();
         if (!owner)
             return view;
+        bool canTransfer = !view.subject.transferActionLabel.empty();
+        bool guestMode = view.subject.isGuestSubject;
         std::vector<std::shared_ptr<Item>> listed;
         if (subject) {
             for (const auto &[slot, item] : subject->equipment()) {
                 if (isInventoryListedEquipmentSlot(slot) && live(item) && itemMatchesFilter(_services, *item, filter)) {
-                    view.items.push_back(describe(item, true));
+                    view.items.push_back(describe(item, true, false));
                     listed.push_back(item);
                 }
             }
         }
         for (const auto &item : owner->items()) {
-            if (live(item) && std::find(listed.begin(), listed.end(), item) == listed.end() && itemMatchesFilter(_services, *item, filter))
-                view.items.push_back(describe(item, false));
+            if (live(item) && std::find(listed.begin(), listed.end(), item) == listed.end() &&
+                itemMatchesFilter(_services, *item, filter)) {
+                bool movable = canTransfer && !item->isEquipped() && !item->isCredits() &&
+                               (guestMode || !item->plotFlag());
+                view.items.push_back(describe(item, false, movable));
+            }
         }
         return view;
     }
@@ -251,24 +327,31 @@ public:
         subject->getOffhandDamage(minimum, maximum);
         view.offDamage = str(boost::format("%d-%d") % minimum % maximum);
         auto attack = [](int bonus) { return (bonus > 0 ? "+" : "") + std::to_string(bonus); };
-        view.mainAttack = attack(subject->getAttackBonus());
-        view.offAttack = attack(subject->getAttackBonus(true));
+        auto safeAttack = [&subject](bool off) {
+            try {
+                return subject->getAttackBonus(off);
+            } catch (const std::out_of_range &) {
+                return 0;
+            }
+        };
+        view.mainAttack = attack(safeAttack(false));
+        view.offAttack = attack(safeAttack(true));
         view.slotAvailable = slot < 0 || evaluateEquipmentSlotActivation(*subject, slot).available;
         if (!view.slotAvailable)
             return view;
         auto equipped = slot >= 0 ? subject->getEquippedItem(slot) : nullptr;
         if (live(equipped))
-            view.items.push_back(describe(equipped, true));
+            view.items.push_back(describe(equipped, true, false));
         for (const auto &item : owner->items()) {
             if (!live(item) || item == equipped)
                 continue;
             if (slot < 0) {
                 if (item->isEquippable())
-                    view.items.push_back(describe(item, false));
+                    view.items.push_back(describe(item, false, false));
             } else {
                 auto decision = evaluateEquipmentCandidate(*subject, slot, item.get());
                 if (decision.visible) {
-                    auto entry = describe(item, false);
+                    auto entry = describe(item, false, false);
                     entry.valid = decision.valid;
                     view.items.push_back(std::move(entry));
                 }
@@ -281,8 +364,10 @@ public:
         auto reject = [&]() { _result = EquipmentRequestResult {revision, EquipmentRequestOutcome::Rejected}; };
         auto subject = _subject.resolve();
         auto owner = _owner.resolve();
-        if (revision != _revision || slot != _slot || slot < 0 || !subject || !owner ||
-            subject != _game.party().getLeader() || owner != _game.party().player()) {
+        auto *coop = _game.coop();
+        bool validParty = subject == _game.party().getLeader() && owner == _game.party().player();
+        bool validGuest = coop && subject && owner == subject && coop->isPackManageableGuest(subject->id());
+        if (revision != _revision || slot != _slot || slot < 0 || !subject || !owner || !(validParty || validGuest)) {
             reject();
             return;
         }
@@ -309,18 +394,23 @@ public:
         // Invalidate all selections before calling authority, including on failure.
         ++_revision;
         _items.clear();
-        if (auto *coop = _game.coop(); coop && coop->isClient()) {
+        if (coop && coop->isClient()) {
             // Co-op: the host is the authority. The request goes to it and
             // the screen follows the sheet the host sends back.
             coop->clientEquip(item, slot);
             _result = EquipmentRequestResult {revision, EquipmentRequestOutcome::Unchanged};
             return;
         }
+        auto beforeEquipped = subject->getEquippedItem(slot);
         auto outcome = applyEquipmentOperation(_game, *subject, *owner, item, slot);
         EquipmentRequestOutcome result;
         switch (outcome) {
         case EquipmentOperationOutcome::Applied:
             result = EquipmentRequestOutcome::Applied;
+            if (validGuest && coop) {
+                auto afterEquipped = subject->getEquippedItem(slot);
+                coop->hostRecordGuestEquipChange(subject->id(), slot, beforeEquipped, afterEquipped);
+            }
             break;
         case EquipmentOperationOutcome::Unchanged:
             result = EquipmentRequestOutcome::Unchanged;
@@ -342,6 +432,7 @@ private:
     ServicesView &_services;
     RuntimeObjectRef<Creature> _subject;
     RuntimeObjectRef<Creature> _owner;
+    uint32_t _inspectedGuestId {0};
     uint64_t _revision {0};
     uint64_t _nextHandle {1};
     int _slot {-1};
@@ -356,34 +447,131 @@ private:
     bool live(const std::shared_ptr<Item> &item) const {
         return item && item->isRuntimeLive() && _game.getObjectById(item->id()) == item;
     }
+
+    std::vector<std::shared_ptr<Creature>> allCandidates() const {
+        std::vector<std::shared_ptr<Creature>> list;
+        auto addUnique = [&list](const std::shared_ptr<Creature> &c) {
+            if (!c || !c->isRuntimeLive() || c->isDead()) {
+                return;
+            }
+            if (std::find(list.begin(), list.end(), c) == list.end()) {
+                list.push_back(c);
+            }
+        };
+        for (int i = 0; i < 3; ++i) {
+            addUnique(_game.party().getMember(i));
+        }
+        if (auto *coop = _game.coop()) {
+            for (const auto &guest : coop->packManageableGuests()) {
+                addUnique(guest);
+            }
+        }
+        return list;
+    }
+
+    std::array<std::shared_ptr<Creature>, 3> buildPortraitTargets() const {
+        std::array<std::shared_ptr<Creature>, 3> slots {};
+        auto candidates = allCandidates();
+        auto *coop = _game.coop();
+        std::shared_ptr<Creature> active;
+        if (_inspectedGuestId != 0 && coop && coop->isPackManageableGuest(_inspectedGuestId)) {
+            active = _game.getObjectById<Creature>(_inspectedGuestId);
+            if (!active || !active->isRuntimeLive() || active->isDead()) {
+                active.reset();
+            }
+        }
+        if (!active) {
+            active = _game.party().getLeader();
+        }
+        slots[0] = active;
+        int out = 1;
+        for (const auto &c : candidates) {
+            if (out >= 3) {
+                break;
+            }
+            if (c && c != active) {
+                slots[out++] = c;
+            }
+        }
+        return slots;
+    }
+
     void bindSubject() {
         ++_revision;
         _items.clear();
-        _subject = _game.party().getLeader();
-        _owner = _game.party().player();
+        auto *coop = _game.coop();
+        std::shared_ptr<Creature> guest;
+        if (_inspectedGuestId != 0 && coop && coop->isPackManageableGuest(_inspectedGuestId)) {
+            guest = _game.getObjectById<Creature>(_inspectedGuestId);
+            if (!guest || !guest->isRuntimeLive() || guest->isDead()) {
+                guest.reset();
+                _inspectedGuestId = 0;
+            }
+        } else {
+            _inspectedGuestId = 0;
+        }
+        if (guest) {
+            _subject = guest;
+            _owner = guest;
+        } else {
+            _subject = _game.party().getLeader();
+            _owner = _game.party().player();
+        }
         _equipment.clear();
         if (auto subject = _subject.resolve()) {
             for (const auto &[slot, item] : subject->equipment())
                 _equipment.emplace(slot, RuntimeObjectRef<Item>(item));
         }
     }
+
     MenuSubjectView subjectView() const {
         MenuSubjectView view;
-        view.credits = std::to_string(_game.party().gold());
+        auto *coop = _game.coop();
         auto subject = _subject.resolve();
+        std::string guestName;
+        if (subject && _inspectedGuestId != 0 && coop && coop->isPackManageableGuest(subject->id(), &guestName)) {
+            view.isGuestSubject = true;
+            view.subjectCreatureId = subject->id();
+            std::string display = !subject->name().empty() ? subject->name() : guestName;
+            view.subjectName = display;
+            view.customTitlePrefix = display + "'s Pack - ";
+            view.transferActionLabel = "Take to Party";
+            auto purse = coop->hostGuestPurse(subject->id());
+            view.credits = std::to_string(purse ? purse->second : 0);
+        } else {
+            view.credits = std::to_string(_game.party().gold());
+            if (subject) {
+                view.subjectCreatureId = subject->id();
+                view.subjectName = subject->name();
+            }
+            if (coop) {
+                auto guests = coop->packManageableGuests();
+                if (!guests.empty() && guests[0]) {
+                    std::string gName;
+                    coop->isPackManageableGuest(guests[0]->id(), &gName);
+                    std::string display = !guests[0]->name().empty() ? guests[0]->name() : gName;
+                    if (!display.empty()) {
+                        view.transferActionLabel = "Give to " + display;
+                    }
+                }
+            }
+        }
         if (!subject)
             return view;
         view.present = true;
+        auto targets = buildPortraitTargets();
         for (int i = 0; i < 3; ++i) {
-            auto member = _game.party().getMember(i);
-            if (member && member->isRuntimeLive())
-                view.portraits[i] = member->portrait();
+            if (targets[i] && targets[i]->isRuntimeLive()) {
+                view.portraits[i] = targets[i]->portrait();
+                view.portraitSelectable[i] = (i > 0);
+            }
         }
         view.vitality = std::to_string(subject->currentHitPoints()) + "/\n" + std::to_string(subject->maxHitPoints());
         view.defense = std::to_string(subject->getDefense());
         return view;
     }
-    MenuItemView describe(const std::shared_ptr<Item> &item, bool equipped) {
+
+    MenuItemView describe(const std::shared_ptr<Item> &item, bool equipped, bool transferable) {
         MenuItemView view;
         view.handle = _nextHandle++;
         _items.emplace(view.handle, BoundItem {RuntimeObjectRef<Item>(item), item->stackSize()});
@@ -392,6 +580,7 @@ private:
         view.icon = item->icon();
         view.stackSize = item->stackSize();
         view.equipped = equipped;
+        view.transferable = transferable;
         return view;
     }
 };
@@ -402,5 +591,9 @@ std::shared_ptr<IInventoryMenuBacking> newInventoryMenuBacking(Game &game, Servi
 }
 std::shared_ptr<IEquipmentMenuBacking> newEquipmentMenuBacking(Game &game, ServicesView &services) {
     return std::make_shared<ItemMenuBacking>(game, services);
+}
+SharedItemMenuBacking newSharedItemMenuBacking(Game &game, ServicesView &services) {
+    auto shared = std::make_shared<ItemMenuBacking>(game, services);
+    return SharedItemMenuBacking {shared, shared};
 }
 } // namespace reone::game

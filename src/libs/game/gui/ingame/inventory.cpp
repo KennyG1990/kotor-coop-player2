@@ -72,20 +72,21 @@ static InventoryFilter nextK1Filter(InventoryFilter filter) {
     }
 }
 
-static std::string k1FilterTitle(InventoryFilter filter) {
+static std::string k1FilterTitle(InventoryFilter filter, const std::string &prefix = std::string()) {
+    const std::string &lead = prefix.empty() ? std::string(kK1InventoryTitlePrefix) : prefix;
     switch (filter) {
     case InventoryFilter::Quest:
-        return std::string(kK1InventoryTitlePrefix) + "Quest Items";
+        return lead + "Quest Items";
     case InventoryFilter::Equippable:
-        return std::string(kK1InventoryTitlePrefix) + "Equippable";
+        return lead + "Equippable";
     case InventoryFilter::Utility:
-        return std::string(kK1InventoryTitlePrefix) + "Utility Items";
+        return lead + "Utility Items";
     case InventoryFilter::Useable:
-        return std::string(kK1InventoryTitlePrefix) + "Useable Items";
+        return lead + "Useable Items";
     case InventoryFilter::New:
-        return std::string(kK1InventoryTitlePrefix) + "New Items";
+        return lead + "New Items";
     default:
-        return std::string(kK1InventoryTitlePrefix) + "All Items";
+        return lead + "All Items";
     }
 }
 
@@ -112,7 +113,22 @@ void InventoryMenu::onGUILoaded() {
         _controls.LBL_CREDITS_VALUE->setVisible(false);
     }
     if (_controls.BTN_USEITEM) {
+        _defaultUseItemText = _controls.BTN_USEITEM->text().text;
+        _controls.BTN_USEITEM->setTextFitWidth(0.88f);
         _controls.BTN_USEITEM->setDisabled(true);
+        _controls.BTN_USEITEM->setOnClick([this]() {
+            if (!_backing || !_controls.LB_ITEMS) {
+                return;
+            }
+            int idx = _controls.LB_ITEMS->selectedItemIndex();
+            if (idx < 0 || idx >= static_cast<int>(_listedItems.size()) || !_listedItems[idx].transferable) {
+                return;
+            }
+            if (_backing->transferItem(_listedItems[idx].handle)) {
+                refreshPortraits();
+                refreshItems();
+            }
+        });
     }
     if (_controls.BTN_EXIT) {
         _controls.BTN_EXIT->setOnClick([this]() {
@@ -141,9 +157,21 @@ void InventoryMenu::onGUILoaded() {
     if (!isTSL()) {
         if (_controls.BTN_CHANGE1) {
             _controls.BTN_CHANGE1->setSelectable(false);
+            _controls.BTN_CHANGE1->setOnClick([this]() {
+                if (_backing && _backing->selectPortrait(1)) {
+                    refreshPortraits();
+                    refreshItems();
+                }
+            });
         }
         if (_controls.BTN_CHANGE2) {
             _controls.BTN_CHANGE2->setSelectable(false);
+            _controls.BTN_CHANGE2->setOnClick([this]() {
+                if (_backing && _backing->selectPortrait(2)) {
+                    refreshPortraits();
+                    refreshItems();
+                }
+            });
         }
     }
 }
@@ -235,12 +263,23 @@ void InventoryMenu::refreshPortraits() {
     _view = _backing ? _backing->readInventory(_filter) : InventoryView {};
     refreshCredits();
     refreshStats();
+    updateFilterControls();
     if (isTSL()) return;
-    _controls.LBL_PORT->setBorderFill(_view.subject.portraits[0]);
-    _controls.BTN_CHANGE1->setBorderFill(_view.subject.portraits[1]);
-    _controls.BTN_CHANGE1->setHilightFill(_view.subject.portraits[1]);
-    _controls.BTN_CHANGE2->setBorderFill(_view.subject.portraits[2]);
-    _controls.BTN_CHANGE2->setHilightFill(_view.subject.portraits[2]);
+    if (_controls.LBL_PORT) {
+        _controls.LBL_PORT->setBorderFill(_view.subject.portraits[0]);
+    }
+    if (_controls.BTN_CHANGE1) {
+        bool ok = _view.subject.portraitSelectable[1] && _view.subject.portraits[1] != nullptr;
+        _controls.BTN_CHANGE1->setBorderFill(_view.subject.portraits[1]);
+        _controls.BTN_CHANGE1->setHilightFill(_view.subject.portraits[1]);
+        _controls.BTN_CHANGE1->setSelectable(ok);
+    }
+    if (_controls.BTN_CHANGE2) {
+        bool ok = _view.subject.portraitSelectable[2] && _view.subject.portraits[2] != nullptr;
+        _controls.BTN_CHANGE2->setBorderFill(_view.subject.portraits[2]);
+        _controls.BTN_CHANGE2->setHilightFill(_view.subject.portraits[2]);
+        _controls.BTN_CHANGE2->setSelectable(ok);
+    }
 }
 
 void InventoryMenu::refreshCredits() {
@@ -313,7 +352,7 @@ void InventoryMenu::updateFilterControls() {
     }
 
     if (_controls.LBL_INV) {
-        _controls.LBL_INV->setTextMessage(k1FilterTitle(_filter));
+        _controls.LBL_INV->setTextMessage(k1FilterTitle(_filter, _view.subject.customTitlePrefix));
     }
     if (_controls.BTN_QUESTITEMS) {
         _controls.BTN_QUESTITEMS->setTextMessage(k1NextFilterAction(_filter));
@@ -354,6 +393,7 @@ void InventoryMenu::clearItemDescription() {
     if (_controls.LB_DESCRIPTION) {
         _controls.LB_DESCRIPTION->clearItems();
     }
+    updateTransferButton();
 }
 
 void InventoryMenu::updateItemDescription() {
@@ -363,6 +403,7 @@ void InventoryMenu::updateItemDescription() {
 
     int selectedItemIdx = _controls.LB_ITEMS->selectedItemIndex();
     if (selectedItemIdx == _selectedItemIdx) {
+        updateTransferButton();
         return;
     }
 
@@ -373,6 +414,19 @@ void InventoryMenu::updateItemDescription() {
 
     if (selectedItemIdx >= 0 && selectedItemIdx < static_cast<int>(_listedItems.size()) && _controls.LB_DESCRIPTION)
         _controls.LB_DESCRIPTION->addTextLinesAsItems(_listedItems[selectedItemIdx].description);
+    updateTransferButton();
+}
+
+void InventoryMenu::updateTransferButton() {
+    if (!_controls.BTN_USEITEM) {
+        return;
+    }
+    int idx = _controls.LB_ITEMS ? _controls.LB_ITEMS->selectedItemIndex() : -1;
+    bool canMove = idx >= 0 && idx < static_cast<int>(_listedItems.size()) &&
+                   _listedItems[idx].transferable && !_view.subject.transferActionLabel.empty();
+    _controls.BTN_USEITEM->setTextMessage(canMove ? _view.subject.transferActionLabel : _defaultUseItemText);
+    _controls.BTN_USEITEM->setDisabled(!canMove);
+    _controls.BTN_USEITEM->setSelectable(canMove);
 }
 
 } // namespace game

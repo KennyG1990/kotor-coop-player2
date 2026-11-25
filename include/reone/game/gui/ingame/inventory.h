@@ -92,6 +92,7 @@ private:
     InventoryView _view;
     std::shared_ptr<IInventoryMenuBacking> _backing;
     std::function<void()> _onExit;
+    std::string _defaultUseItemText;
 
     void onGUILoaded() override;
     void configureItemsListBox();
@@ -103,6 +104,7 @@ private:
     void updateFilterControls();
     void updateItemDescription();
     void clearItemDescription();
+    void updateTransferButton();
 
     void bindControls() {
         _controls.BTN_ALL = findControl<gui::Button>("BTN_ALL");

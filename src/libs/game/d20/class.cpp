@@ -281,6 +281,9 @@ int CreatureClass::getAttackBonus(int level) const {
 int CreatureClass::getDefenseBonus(int level) const {
     assert(level >= 0);
     assert(!_defenseBonuses.empty());
+    if (_defenseBonuses.empty() || level < 0) {
+        return 0;
+    }
 
     if (level >= static_cast<int>(_defenseBonuses.size())) {
         return _defenseBonuses.back();

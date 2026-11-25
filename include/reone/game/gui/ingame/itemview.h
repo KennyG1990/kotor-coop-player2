@@ -52,11 +52,18 @@ struct MenuItemView {
     int stackSize {1};
     bool equipped {false};
     bool valid {true};
+    bool transferable {false};
 };
 
 struct MenuSubjectView {
     bool present {false};
+    bool isGuestSubject {false};
+    uint32_t subjectCreatureId {0};
+    std::string subjectName;
+    std::string customTitlePrefix;
+    std::string transferActionLabel;
     std::array<std::shared_ptr<graphics::Texture>, 3> portraits;
+    std::array<bool, 3> portraitSelectable {false, false, false};
     std::string vitality;
     std::string defense;
     std::string credits;
@@ -92,6 +99,9 @@ class IInventoryMenuBacking {
 public:
     virtual ~IInventoryMenuBacking() = default;
     virtual InventoryView readInventory(InventoryFilter filter) = 0;
+    virtual bool selectPortrait(int slot) { return false; }
+    virtual bool transferItem(uint64_t handle) { return false; }
+    virtual void resetInspectedSubject() {}
 };
 
 class IEquipmentMenuBacking {
@@ -103,6 +113,9 @@ public:
     // Handle zero explicitly requests clearing the selected slot.
     virtual void equip(uint64_t revision, uint64_t handle, int slot) = 0;
     virtual std::optional<EquipmentRequestResult> equipmentResult() const = 0;
+    virtual bool selectPortrait(int slot) { return false; }
+    virtual void resetInspectedSubject() {}
+    virtual uint32_t activeSubjectId() const { return 0; }
 };
 
 } // namespace reone::game

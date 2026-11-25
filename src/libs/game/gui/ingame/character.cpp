@@ -83,6 +83,10 @@ void CharacterMenu::onGUILoaded() {
     if (_controls.LBL_BAR6)
         _lblBar.push_back(_controls.LBL_BAR6);
 
+    if (_controls.LBL_TITLE) {
+        _defaultTitleText = _controls.LBL_TITLE->text().text;
+    }
+
     if (isTSL()) {
         _controls.LBL_STATSBORDER->setTintBorderFill(true);
         _controls.LBL_XP_BACK->setTintBorderFill(true);
@@ -90,16 +94,42 @@ void CharacterMenu::onGUILoaded() {
         enableK2ButtonBodyFill(_controls.BTN_EXIT);
         _controls.BTN_CHANGE1 = _inGameMenu.getBtnChange2();
         _controls.BTN_CHANGE2 = _inGameMenu.getBtnChange3();
+    } else {
+        if (_controls.BTN_CHANGE1) {
+            _controls.BTN_CHANGE1->setSelectable(false);
+            _controls.BTN_CHANGE1->setOnClick([this]() {
+                if (_itemBacking && _itemBacking->selectPortrait(1)) {
+                    refreshControls();
+                }
+            });
+        }
+        if (_controls.BTN_CHANGE2) {
+            _controls.BTN_CHANGE2->setSelectable(false);
+            _controls.BTN_CHANGE2->setOnClick([this]() {
+                if (_itemBacking && _itemBacking->selectPortrait(2)) {
+                    refreshControls();
+                }
+            });
+        }
     }
 
     // Auto: the level-up screen's steps with every Recommended pick.
     _controls.BTN_AUTO->setOnClick([this]() {
+        if (_subjectView.isGuestSubject) {
+            return;
+        }
         _game.levelUpThroughScreen(_game.party().getLeader(), true);
     });
     _controls.BTN_EXIT->setOnClick([this]() {
+        if (_itemBacking) {
+            _itemBacking->resetInspectedSubject();
+        }
         _game.openInGame();
     });
     _controls.BTN_LEVELUP->setOnClick([this]() {
+        if (_subjectView.isGuestSubject) {
+            return;
+        }
         _game.openLevelUp();
     });
 
@@ -158,6 +188,18 @@ int CharacterMenu::partyAIStyleStrRef(int style) {
     }
 }
 
+std::shared_ptr<Creature> CharacterMenu::subjectCreature() const {
+    if (_itemBacking) {
+        uint32_t subjId = _itemBacking->activeSubjectId();
+        if (subjId != 0) {
+            if (auto subj = _game.getObjectById<Creature>(subjId); subj && subj->isRuntimeLive()) {
+                return subj;
+            }
+        }
+    }
+    return _game.party().getLeader();
+}
+
 void CharacterMenu::refreshPartyAIStyle() {
     if (!_scripts) {
         return;
@@ -166,13 +208,14 @@ void CharacterMenu::refreshPartyAIStyle() {
     auto &strings = _services.resource.strings;
     _scripts->setTextMessage(strings.getText(1067) + ": " + strings.getText(partyAIStyleStrRef(_game.party().aiStyle())));
     auto *coop = _game.coop();
-    _scripts->setDisabled(coop && coop->isClient());
+    _scripts->setDisabled((coop && coop->isClient()) || _subjectView.isGuestSubject);
 }
 
 void CharacterMenu::update(float dt) {
     std::shared_ptr<Creature> leader(_game.party().getLeader());
-    _controls.BTN_LEVELUP->setVisible(leader->isLevelUpPending());
-    _controls.BTN_AUTO->setVisible(leader->isLevelUpPending());
+    bool canLevelLeader = !_subjectView.isGuestSubject && leader && leader->isLevelUpPending();
+    _controls.BTN_LEVELUP->setVisible(canLevelLeader);
+    _controls.BTN_AUTO->setVisible(canLevelLeader);
     GameGUI::update(dt);
 }
 
@@ -185,9 +228,19 @@ static std::string describeAbilityModifier(int value) {
 }
 
 void CharacterMenu::refreshControls() {
+    _subjectView = _itemBacking ? _itemBacking->readEquipment(-1).subject : MenuSubjectView {};
     refreshPartyAIStyle();
-    std::shared_ptr<Creature> partyLeader(_game.party().getLeader());
-    CreatureAttributes &attributes = partyLeader->attributes();
+    std::shared_ptr<Creature> subject(subjectCreature());
+    if (!subject) {
+        return;
+    }
+    if (_controls.LBL_TITLE && !_defaultTitleText.empty()) {
+        _controls.LBL_TITLE->setTextMessage(
+            _subjectView.isGuestSubject && !_subjectView.subjectName.empty()
+                ? _subjectView.subjectName + " - " + _defaultTitleText
+                : _defaultTitleText);
+    }
+    CreatureAttributes &attributes = subject->attributes();
 
     if (!isTSL()) {
         _controls.LBL_CLASS1->setTextMessage(describeClass(attributes.getClassByPosition(1)));
@@ -204,24 +257,24 @@ void CharacterMenu::refreshControls() {
         }
     }
 
-    _controls.LBL_VITALITY_STAT->setTextMessage(str(boost::format("%d/%d") % partyLeader->currentHitPoints() % partyLeader->maxHitPoints()));
-    _controls.LBL_DEFENSE_STAT->setTextMessage(std::to_string(partyLeader->getDefense()));
-    _controls.LBL_FORCE_STAT->setTextMessage(partyLeader->maxForcePoints() > 0
-                                                 ? str(boost::format("%d/%d") % partyLeader->currentForce() % partyLeader->maxForcePoints())
+    _controls.LBL_VITALITY_STAT->setTextMessage(str(boost::format("%d/%d") % subject->currentHitPoints() % subject->maxHitPoints()));
+    _controls.LBL_DEFENSE_STAT->setTextMessage(std::to_string(subject->getDefense()));
+    _controls.LBL_FORCE_STAT->setTextMessage(subject->maxForcePoints() > 0
+                                                 ? str(boost::format("%d/%d") % subject->currentForce() % subject->maxForcePoints())
                                                  : std::string());
 
-    _controls.LBL_STR->setTextMessage(std::to_string(partyLeader->getEffectiveAbilityScore(Ability::Strength)));
-    _controls.LBL_STR_MOD->setTextMessage(describeAbilityModifier(partyLeader->getEffectiveAbilityModifier(Ability::Strength)));
-    _controls.LBL_DEX->setTextMessage(std::to_string(partyLeader->getEffectiveAbilityScore(Ability::Dexterity)));
-    _controls.LBL_DEX_MOD->setTextMessage(describeAbilityModifier(partyLeader->getEffectiveAbilityModifier(Ability::Dexterity)));
-    _controls.LBL_CON->setTextMessage(std::to_string(partyLeader->getEffectiveAbilityScore(Ability::Constitution)));
-    _controls.LBL_CON_MOD->setTextMessage(describeAbilityModifier(partyLeader->getEffectiveAbilityModifier(Ability::Constitution)));
-    _controls.LBL_INT->setTextMessage(std::to_string(partyLeader->getEffectiveAbilityScore(Ability::Intelligence)));
-    _controls.LBL_INT_MOD->setTextMessage(describeAbilityModifier(partyLeader->getEffectiveAbilityModifier(Ability::Intelligence)));
-    _controls.LBL_WIS->setTextMessage(std::to_string(partyLeader->getEffectiveAbilityScore(Ability::Wisdom)));
-    _controls.LBL_WIS_MOD->setTextMessage(describeAbilityModifier(partyLeader->getEffectiveAbilityModifier(Ability::Wisdom)));
-    _controls.LBL_CHA->setTextMessage(std::to_string(partyLeader->getEffectiveAbilityScore(Ability::Charisma)));
-    _controls.LBL_CHA_MOD->setTextMessage(describeAbilityModifier(partyLeader->getEffectiveAbilityModifier(Ability::Charisma)));
+    _controls.LBL_STR->setTextMessage(std::to_string(subject->getEffectiveAbilityScore(Ability::Strength)));
+    _controls.LBL_STR_MOD->setTextMessage(describeAbilityModifier(subject->getEffectiveAbilityModifier(Ability::Strength)));
+    _controls.LBL_DEX->setTextMessage(std::to_string(subject->getEffectiveAbilityScore(Ability::Dexterity)));
+    _controls.LBL_DEX_MOD->setTextMessage(describeAbilityModifier(subject->getEffectiveAbilityModifier(Ability::Dexterity)));
+    _controls.LBL_CON->setTextMessage(std::to_string(subject->getEffectiveAbilityScore(Ability::Constitution)));
+    _controls.LBL_CON_MOD->setTextMessage(describeAbilityModifier(subject->getEffectiveAbilityModifier(Ability::Constitution)));
+    _controls.LBL_INT->setTextMessage(std::to_string(subject->getEffectiveAbilityScore(Ability::Intelligence)));
+    _controls.LBL_INT_MOD->setTextMessage(describeAbilityModifier(subject->getEffectiveAbilityModifier(Ability::Intelligence)));
+    _controls.LBL_WIS->setTextMessage(std::to_string(subject->getEffectiveAbilityScore(Ability::Wisdom)));
+    _controls.LBL_WIS_MOD->setTextMessage(describeAbilityModifier(subject->getEffectiveAbilityModifier(Ability::Wisdom)));
+    _controls.LBL_CHA->setTextMessage(std::to_string(subject->getEffectiveAbilityScore(Ability::Charisma)));
+    _controls.LBL_CHA_MOD->setTextMessage(describeAbilityModifier(subject->getEffectiveAbilityModifier(Ability::Charisma)));
 
     SavingThrows savingThrows(attributes.getAggregateSavingThrows());
     _controls.LBL_FORTITUDE_STAT->setTextMessage(std::to_string(savingThrows.fortitude));
@@ -230,11 +283,11 @@ void CharacterMenu::refreshControls() {
 
     if (_controls.SLD_ALIGN) {
         // Light at the top, as the LBL_LIGHT / LBL_DARK labels read.
-        _controls.SLD_ALIGN->setValue(partyLeader->goodEvil() / 100.0f);
+        _controls.SLD_ALIGN->setValue(subject->goodEvil() / 100.0f);
     }
 
-    _controls.LBL_EXPERIENCE_STAT->setTextMessage(std::to_string(partyLeader->xp()));
-    _controls.LBL_NEEDED_XP->setTextMessage(std::to_string(partyLeader->getNeededXP()));
+    _controls.LBL_EXPERIENCE_STAT->setTextMessage(std::to_string(subject->xp()));
+    _controls.LBL_NEEDED_XP->setTextMessage(std::to_string(subject->getNeededXP()));
 
     refreshPortraits();
     refresh3D();
@@ -250,6 +303,22 @@ std::string CharacterMenu::describeClass(ClassType clazz) const {
 void CharacterMenu::refreshPortraits() {
     if (isTSL())
         return;
+
+    if (_itemBacking && _subjectView.present) {
+        if (_controls.BTN_CHANGE1) {
+            bool ok = _subjectView.portraitSelectable[1] && _subjectView.portraits[1] != nullptr;
+            _controls.BTN_CHANGE1->setBorderFill(_subjectView.portraits[1]);
+            _controls.BTN_CHANGE1->setHilightFill(_subjectView.portraits[1]);
+            _controls.BTN_CHANGE1->setSelectable(ok);
+        }
+        if (_controls.BTN_CHANGE2) {
+            bool ok = _subjectView.portraitSelectable[2] && _subjectView.portraits[2] != nullptr;
+            _controls.BTN_CHANGE2->setBorderFill(_subjectView.portraits[2]);
+            _controls.BTN_CHANGE2->setHilightFill(_subjectView.portraits[2]);
+            _controls.BTN_CHANGE2->setSelectable(ok);
+        }
+        return;
+    }
 
     Party &party = _game.party();
     std::shared_ptr<Creature> partyMember1(party.getMember(1));
@@ -280,14 +349,17 @@ void CharacterMenu::refresh3D() {
 static void softenAlignmentLights(SceneNode &node, float factor);
 
 std::shared_ptr<ModelSceneNode> CharacterMenu::getSceneModel(ISceneGraph &sceneGraph) const {
-    auto partyLeader = _game.party().getLeader();
+    auto subject = subjectCreature();
+    if (!subject) {
+        return nullptr;
+    }
 
     std::shared_ptr<Creature> character =
         _game.newPresentationCreature(sceneGraph.name());
     character->setFacing(-glm::half_pi<float>());
-    character->setAppearance(partyLeader->appearance());
+    character->setAppearance(subject->appearance());
 
-    for (auto &item : partyLeader->equipment()) {
+    for (auto &item : subject->equipment()) {
         switch (item.first) {
         case InventorySlots::body: {
             auto previewItem = _game.newPresentationItem();
@@ -308,9 +380,9 @@ std::shared_ptr<ModelSceneNode> CharacterMenu::getSceneModel(ISceneGraph &sceneG
     // animations. (charmain_light is a plain blue mist neither game shows here.)
     auto sceneModel = sceneGraph.newModel(*_services.resource.models.get("charrec_light"), ModelUsage::GUI);
     sceneModel->attach("charrec_light", *character->sceneNode());
-    sceneModel->playAnimation(alignmentAnimation(partyLeader->goodEvil()), nullptr,
+    sceneModel->playAnimation(alignmentAnimation(subject->goodEvil()), nullptr,
                               AnimationProperties::fromFlags(AnimationFlags::loop));
-    int goodEvil = std::clamp(partyLeader->goodEvil(), 0, 100);
+    int goodEvil = std::clamp(subject->goodEvil(), 0, 100);
     if (goodEvil < 50) {
         softenAlignmentLights(*sceneModel, 1.0f - 0.8f * (50 - goodEvil) / 50.0f);
     }

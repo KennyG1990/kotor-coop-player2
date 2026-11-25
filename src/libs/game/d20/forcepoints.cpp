@@ -52,20 +52,22 @@ int computeMaxForcePoints(const CreatureAttributes &attributes, const ForcePoint
     const int wisdom = attributes.getAbilityModifier(Ability::Wisdom);
 
     if (subject.playerProgression) {
-        if (classes.empty() || !classes.back().first || !classes.back().first->isSpellCaster()) {
+        if (!classes.empty() && classes.back().first && classes.back().first->isSpellCaster()) {
+            int result = 0;
+            for (const auto &[clazz, level] : classes) {
+                if (!clazz || !clazz->isSpellCaster()) {
+                    continue;
+                }
+                result += level * std::max(1, clazz->forcePointsPerLevel() + wisdom);
+            }
+            return std::max(0, result);
+        }
+        if (!attributes.hasFeat(FeatType::ForceSensitive)) {
             return 0;
         }
-        int result = 0;
-        for (const auto &[clazz, level] : classes) {
-            if (!clazz || !clazz->isSpellCaster()) {
-                continue;
-            }
-            result += level * std::max(1, clazz->forcePointsPerLevel() + wisdom);
-        }
-        return std::max(0, result);
     }
 
-    if (!hasForceClass(attributes)) {
+    if (!hasForceClass(attributes) && !attributes.hasFeat(FeatType::ForceSensitive)) {
         return 0;
     }
     const int level = attributes.getAggregateLevel();

@@ -507,6 +507,18 @@ public:
      * its player). A loss takes no more than it holds. Returns what was moved.
      */
     int hostMoveGuestCredits(const std::string &player, int delta);
+    /**
+     * Host, Free Mode (fork addition): awaken a guest character's Force sensitivity (`FeatType::ForceSensitive` = 116),
+     * grant a starting Force power (`spellId`), ensure at least `baseFp` base Force Points, refill their Force pool,
+     * and persist the updated `GuestCharacter` + `CharacterSheet` immediately. Returns empty string on success.
+     */
+    std::string hostAwakenGuest(const std::string &who, int spellId, int baseFp, boost::json::object &out);
+    /**
+     * Host, Free Mode (fork addition): atomically transfer credits between the party purse and a guest's purse
+     * (`deltaToGuest > 0` pays the guest from party gold; `< 0` pays the party from the guest's credits), clamped
+     * strictly by what the paying side holds so total credits are conserved without touching cheat flags.
+     */
+    std::string hostSettleWager(const std::string &who, int deltaToGuest, boost::json::object &out);
     /** Host: every XP award the party gets goes to each guest too (design, "XP: mirrors the host"). */
     void onPartyXP(int amount);
     /** Client: the character this player brings (made with character generation, or loaded). Saved locally and sent. */

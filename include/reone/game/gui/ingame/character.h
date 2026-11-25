@@ -25,11 +25,13 @@
 #include "reone/scene/node/model.h"
 
 #include "../../gui.h"
+#include "itemview.h"
 
 namespace reone {
 
 namespace game {
 
+class Creature;
 class InGameMenu;
 
 class CharacterMenu : public GameGUI {
@@ -37,9 +39,11 @@ public:
     CharacterMenu(
         Game &game,
         InGameMenu &inGameMenu,
-        ServicesView &services) :
+        ServicesView &services,
+        std::shared_ptr<IEquipmentMenuBacking> itemBacking = nullptr) :
         GameGUI(game, services),
-        _inGameMenu(inGameMenu) {
+        _inGameMenu(inGameMenu),
+        _itemBacking(std::move(itemBacking)) {
         _resRef = guiResRef("character");
     }
 
@@ -158,6 +162,11 @@ private:
     std::vector<std::shared_ptr<gui::Label>> _lblBar;
 
     InGameMenu &_inGameMenu;
+    std::shared_ptr<IEquipmentMenuBacking> _itemBacking;
+    std::string _defaultTitleText;
+    MenuSubjectView _subjectView;
+
+    std::shared_ptr<Creature> subjectCreature() const;
 
     void onGUILoaded() override;
 

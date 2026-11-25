@@ -1480,6 +1480,96 @@ int CoopSession::hostMoveGuestCredits(const std::string &player, int delta) {
     return moved;
 }
 
+std::string CoopSession::hostAwakenGuest(const std::string &who, int spellId, int baseFp, boost::json::object &out) {
+    if (!isHost() || !freeMode()) {
+        return "coopawaken: host, Free Mode only";
+    }
+    if (spellId < 0) {
+        return "invalid spell id";
+    }
+    auto spell = _game.services().game.spells.get(static_cast<SpellType>(spellId));
+    if (!spell) {
+        return "invalid spell id";
+    }
+    baseFp = std::clamp(baseFp, 10, 500);
+    for (auto &[connection, client] : _clients) {
+        if (!boost::iequals(client.name, who) && std::to_string(client.clientId) != who) {
+            continue;
+        }
+        auto creature = client.guestId ? _game.getObjectById<Creature>(client.guestId) : nullptr;
+        if (!creature || !creature->isRuntimeLive() || creature->isDead()) {
+            return "that player's character is not here";
+        }
+        creature->attributes().addFeat(FeatType::ForceSensitive);
+        creature->attributes().addSpell(static_cast<SpellType>(spellId));
+        if (creature->forcePoints() < baseFp) {
+            creature->addBaseForcePoints(baseFp - creature->forcePoints());
+        } else {
+            creature->recalculateForcePoints();
+        }
+        creature->setCurrentForcePoints(creature->maxForcePoints());
+        client.sheetSent.clear();
+        hostSyncGuest(client, true);
+        hostSendSheets();
+        out["guest"] = client.name;
+        out["id"] = creature->id();
+        out["feat"] = static_cast<int>(FeatType::ForceSensitive);
+        out["spell"] = spellId;
+        out["spellName"] = spell->name;
+        out["force"] = creature->currentForce();
+        out["maxForce"] = creature->maxForcePoints();
+        info("Co-op: " + client.name + " awakened in the Force (" + spell->name + ")");
+        return "";
+    }
+    return "no such player";
+}
+
+std::string CoopSession::hostSettleWager(const std::string &who, int deltaToGuest, boost::json::object &out) {
+    if (!isHost() || !freeMode()) {
+        return "coopwager: host, Free Mode only";
+    }
+    for (auto &[connection, client] : _clients) {
+        if (!boost::iequals(client.name, who) && std::to_string(client.clientId) != who) {
+            continue;
+        }
+        auto record = _guests.find(client.name);
+        if (record == _guests.end()) {
+            return "no guest record for that player";
+        }
+        int partyBefore = _game.party().gold();
+        int guestBefore = record->second.credits;
+        int moved = 0;
+        if (deltaToGuest > 0) {
+            int cap = std::min(partyBefore, kMaxGuestCredits - guestBefore);
+            int amount = std::max(0, std::min(deltaToGuest, cap));
+            if (amount > 0) {
+                int gained = hostMoveGuestCredits(client.name, amount);
+                if (gained > 0) {
+                    _game.party().takeGold(gained);
+                }
+                moved = gained;
+            }
+        } else if (deltaToGuest < 0) {
+            int64_t want64 = -static_cast<int64_t>(deltaToGuest);
+            int amount = static_cast<int>(std::max<int64_t>(0, std::min<int64_t>(want64, guestBefore)));
+            if (amount > 0) {
+                int paid = -hostMoveGuestCredits(client.name, -amount);
+                if (paid > 0) {
+                    _game.party().giveGold(paid);
+                }
+                moved = -paid;
+            }
+        }
+        hostSyncGuest(client, true);
+        out["guest"] = client.name;
+        out["moved"] = moved;
+        out["partyGold"] = _game.party().gold();
+        out["guestCredits"] = record->second.credits;
+        return "";
+    }
+    return "no such player";
+}
+
 // Client
 
 std::filesystem::path CoopSession::guestPath() const {

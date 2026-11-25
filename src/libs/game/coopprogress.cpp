@@ -711,6 +711,12 @@ void applyCoopCharacterSheet(Game &game, Creature &creature, const CharacterShee
         attributes.addSpell(static_cast<SpellType>(spell));
     }
     creature.attributes() = attributes;
+    if (attributes.hasFeat(FeatType::ForceSensitive) && creature.forcePoints() < 40) {
+        creature.addBaseForcePoints(40 - creature.forcePoints());
+        creature.setCurrentForcePoints(creature.maxForcePoints());
+    } else {
+        creature.recalculateForcePoints();
+    }
     creature.setXP(sheet.xp);
     // Every equipment slot, by the client's own copy of the host's item.
     std::set<int> slots;

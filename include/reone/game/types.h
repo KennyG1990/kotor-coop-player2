@@ -577,6 +577,7 @@ enum class FeatType {
     Dueling = 113,
     ImprovedDueling = 114,
     MasterDueling = 115,
+    ForceSensitive = 116,
     ImprovedToughness = 123,
     MasterToughness = 124,
 

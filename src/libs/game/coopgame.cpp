@@ -29,7 +29,10 @@
 #include "reone/game/action/jumptolocation.h"
 #include "reone/resource/2da.h"
 #include "reone/resource/director.h"
+#include "reone/resource/gff.h"
 #include "reone/resource/provider/2das.h"
+#include "reone/resource/provider/gffs.h"
+#include "reone/game/saveprovenance.h"
 #include "reone/game/gui/chargen.h"
 #include "reone/game/gui/ingame.h"
 #include "reone/game/gui/ingame/options.h"
@@ -915,7 +918,7 @@ void Game::initCoopConsole() {
         json::array list;
         if (auto giver = _party.actualPlayer()) {
             for (const auto &item : giver->items()) {
-                if (!item || item->isEquipped() || item->blueprintResRef().empty() || list.size() >= 200) {
+                if (!item || item->isEquipped() || item->plotFlag() || item->blueprintResRef().empty() || list.size() >= 200) {
                     continue;
                 }
                 json::object entry;
@@ -926,6 +929,143 @@ void Game::initCoopConsole() {
             }
         }
         _console.printLine(json::serialize(list));
+    });
+    _console.registerCommand("coopawaken", "co-op Free Mode host: awaken a guest's Force sensitivity, grant a starting power and Force pool: coopawaken <player name|client id> <spell id> [base fp=40]", [this](const ConsoleArgs &args) {
+        namespace json = boost::json;
+        auto spellId = args.get<int>(2);
+        if (args.size() < 3 || args.size() > 4 || !spellId) {
+            throw std::runtime_error("Usage: coopawaken <player name|client id> <spell id> [base fp=40]");
+        }
+        int baseFp = 40;
+        if (args.size() == 4) {
+            auto parsedFp = args.get<int>(3);
+            if (!parsedFp) {
+                throw std::runtime_error("Usage: coopawaken <player name|client id> <spell id> [base fp=40]");
+            }
+            baseFp = *parsedFp;
+        }
+        if (!_coop || !_coop->isHost()) {
+            throw std::runtime_error("only the host can awaken a guest");
+        }
+        json::object out;
+        auto why = _coop->hostAwakenGuest(std::string(*args[1]), *spellId, baseFp, out);
+        if (!why.empty()) {
+            throw std::runtime_error(why);
+        }
+        _console.printLine(json::serialize(out));
+    });
+    _console.registerCommand("coopwager", "co-op Free Mode host: settle a credit wager between party gold and a guest's purse: coopwager <player name|client id> <delta to guest>", [this](const ConsoleArgs &args) {
+        namespace json = boost::json;
+        auto delta = args.get<int>(2);
+        if (args.size() != 3 || !delta) {
+            throw std::runtime_error("Usage: coopwager <player name|client id> <delta to guest>");
+        }
+        if (!_coop || !_coop->isHost()) {
+            throw std::runtime_error("only the host can settle a wager");
+        }
+        json::object out;
+        auto why = _coop->hostSettleWager(std::string(*args[1]), *delta, out);
+        if (!why.empty()) {
+            throw std::runtime_error(why);
+        }
+        _console.printLine(json::serialize(out));
+    });
+    _console.registerCommand("coopnote", "co-op Free Mode host: place a custom-titled personal datapad note in Party Inventory: coopnote <base64 JSON>", [this](const ConsoleArgs &args) {
+        namespace json = boost::json;
+        if (args.size() != 2) {
+            throw std::runtime_error("Usage: coopnote <base64 JSON>");
+        }
+        if (!_coop || !_coop->isHost() || !_coop->freeMode()) {
+            throw std::runtime_error("coopnote: host, Free Mode only");
+        }
+        auto owner = _party.actualPlayer() ? _party.actualPlayer() : _party.player();
+        if (!owner || !owner->isRuntimeLive()) {
+            throw std::runtime_error("no player inventory owner");
+        }
+        json::value parsed;
+        try {
+            parsed = json::parse(decodeBase64(std::string(*args[1])));
+        } catch (const std::exception &e) {
+            throw std::runtime_error(std::string("coopnote invalid JSON: ") + e.what());
+        }
+        if (!parsed.is_object()) {
+            throw std::runtime_error("coopnote expected a JSON object");
+        }
+        const auto &obj = parsed.as_object();
+        auto strField = [&](const char *key) -> std::string {
+            auto it = obj.find(key);
+            return (it != obj.end() && it->value().is_string())
+                       ? std::string(it->value().as_string().c_str())
+                       : std::string();
+        };
+        std::string title = boost::trim_copy(strField("title"));
+        std::string body = boost::trim_copy(strField("body"));
+        std::string rawTag = boost::trim_copy(strField("tag"));
+        if (title.empty() || body.empty()) {
+            throw std::runtime_error("coopnote requires non-empty title and body");
+        }
+        if (title.size() > 120) {
+            title.resize(120);
+        }
+        if (body.size() > 4000) {
+            body.resize(4000);
+        }
+        std::string tag;
+        for (char c : rawTag) {
+            if (std::isalnum(static_cast<unsigned char>(c)) || c == '_') {
+                tag.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+            }
+            if (tag.size() >= 32) {
+                break;
+            }
+        }
+        if (tag.empty()) {
+            tag = "p2_note_" + std::to_string(_tickCount);
+        }
+        for (const auto &existing : owner->items()) {
+            if (existing && existing->isRuntimeLive() && boost::iequals(existing->tag(), tag)) {
+                json::object dup;
+                dup["id"] = existing->id();
+                dup["tag"] = existing->tag();
+                dup["title"] = existing->localizedName();
+                dup["duplicate"] = true;
+                _console.printLine(json::serialize(dup));
+                return;
+            }
+        }
+        auto tpl = _services.resource.gffs.get("g_i_datapad001", resource::ResType::Uti);
+        auto gff = tpl ? tpl->deepCopy()
+                       : resource::Gff::Builder()
+                             .type(0)
+                             .field(resource::Gff::Field::newInt("BaseItem", 63))
+                             .build();
+        replaceSaveField(*gff, resource::Gff::Field::newResRef("TemplateResRef", "g_i_datapad001"));
+        replaceSaveField(*gff, resource::Gff::Field::newCExoString("Tag", tag));
+        replaceSaveField(*gff, resource::Gff::Field::newCExoLocString("LocalizedName", -1, title));
+        replaceSaveField(*gff, resource::Gff::Field::newCExoLocString("Description", -1, body));
+        replaceSaveField(*gff, resource::Gff::Field::newCExoLocString("DescIdentified", -1, body));
+        replaceSaveField(*gff, resource::Gff::Field::newByte("Identified", 1));
+        replaceSaveField(*gff, resource::Gff::Field::newWord("StackSize", 1));
+        replaceSaveField(*gff, resource::Gff::Field::newByte("Plot", 1));
+        replaceSaveField(*gff, resource::Gff::Field::newByte("Dropable", 1));
+        replaceSaveField(*gff, resource::Gff::Field::newByte("Stolen", 0));
+        replaceSaveField(*gff, resource::Gff::Field::newDword("Cost", 0));
+        replaceSaveField(*gff, resource::Gff::Field::newDword("AddCost", 0));
+
+        auto ctx = SerializedIdentityContext::templateResource("g_i_datapad001");
+        auto item = newOwnedItem(*gff, ctx);
+        if (!item) {
+            throw std::runtime_error("coopnote could not instantiate datapad item");
+        }
+        item->captureSaveRecord(*gff, ctx, {SaveRecordOriginKind::PartyInventoryItem, "inventory"});
+        owner->addItem(item);
+
+        json::object res;
+        res["id"] = item->id();
+        res["tag"] = item->tag();
+        res["title"] = item->localizedName();
+        res["duplicate"] = false;
+        _console.printLine(json::serialize(res));
     });
     _console.registerCommand("cooplevelup", "co-op client: level up the companion through the level-up screens (Recommended): cooplevelup", [=](const ConsoleArgs &) {
         auto &session = clientSession();

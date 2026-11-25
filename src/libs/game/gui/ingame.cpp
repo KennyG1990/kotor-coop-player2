@@ -97,7 +97,7 @@ void InGameMenu::loadInventory() {
 }
 
 void InGameMenu::loadCharacter() {
-    _character = std::make_shared<CharacterMenu>(_game, *this, _services);
+    _character = std::make_shared<CharacterMenu>(_game, *this, _services, _sharedItems.equipment);
     _character->init();
     _host->registerScreen(InGameMenuTab::Character, _character);
 }

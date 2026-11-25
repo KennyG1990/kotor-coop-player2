@@ -40,6 +40,7 @@
 #include "reone/game/companionbrain.h"
 #include "reone/game/coopsession.h"
 #include "reone/game/gui/ingame/itembacking.h"
+#include "reone/game/savewidesnapshot.h"
 #include "reone/game/gui/conversation.h"
 #include "reone/game/guestbenchscreen.h"
 #include "reone/resource/dialog.h"
@@ -6196,6 +6197,147 @@ TEST_F(CoopFreeSessionTest, opted_in_guest_pack_and_equipment_are_manageable_fro
     shared.equipment->resetInspectedSubject();
     auto resetView = shared.inventory->readInventory(InventoryFilter::All);
     EXPECT_FALSE(resetView.subject.isGuestSubject);
+}
+
+TEST_F(CoopFreeSessionTest, coopawaken_grants_force_sensitive_starter_power_and_persists_force_pool_before_jedi_class) {
+    auto forcePush = std::make_shared<Spell>();
+    forcePush->type = SpellType::ForcePush;
+    forcePush->name = "Force Push";
+    forcePush->forcePoints = 10;
+    EXPECT_CALL(_engine.gameModule().spells(), get(SpellType::ForcePush))
+        .Times(AnyNumber())
+        .WillRepeatedly(Return(forcePush));
+
+    join(sampleGuest());
+    _client.inbox.clear();
+    tick();
+    uint32_t gid = guestId();
+    ASSERT_NE(0u, gid);
+    auto guest = _game->getObjectById<Creature>(gid);
+    ASSERT_NE(nullptr, guest);
+    EXPECT_EQ(0, guest->maxForcePoints());
+    EXPECT_FALSE(guest->attributes().hasFeat(FeatType::ForceSensitive));
+    EXPECT_FALSE(guest->attributes().hasSpell(SpellType::ForcePush));
+
+    TestGameModule::initConsole(*_game);
+    _console.lines.clear();
+    _console.execute("coopawaken", {"Alice", "23", "40"});
+    ASSERT_FALSE(_console.lines.empty());
+
+    EXPECT_TRUE(guest->attributes().hasFeat(FeatType::ForceSensitive));
+    EXPECT_TRUE(guest->attributes().hasSpell(SpellType::ForcePush));
+    EXPECT_GE(guest->maxForcePoints(), 40);
+    EXPECT_EQ(guest->maxForcePoints(), guest->currentForce());
+
+    // GuestCharacter and CharacterSheet packets update immediately so the guest saves and sees the power.
+    _client.poll();
+    auto savedGuests = _client.take<net::GuestCharacter>(net::MessageType::GuestCharacter);
+    ASSERT_FALSE(savedGuests.empty());
+    const auto &saved = savedGuests.back();
+    EXPECT_GE(saved.baseFp, 40);
+    EXPECT_NE(saved.feats.end(), std::find(saved.feats.begin(), saved.feats.end(), static_cast<uint16_t>(FeatType::ForceSensitive)));
+    EXPECT_NE(saved.spells.end(), std::find(saved.spells.begin(), saved.spells.end(), static_cast<uint16_t>(SpellType::ForcePush)));
+
+    // Guest can cast Force Push immediately via CommandType::UsePower without taking a Jedi class first.
+    net::Command cast;
+    cast.type = net::CommandType::UsePower;
+    cast.actor = gid;
+    cast.param = static_cast<int32_t>(SpellType::ForcePush);
+    cast.target = _sith->id();
+    CoopCommandTargets targets;
+    EXPECT_EQ(net::CommandReject::None, validateCoopCommand(*_game, cast, gid, targets, true));
+}
+
+TEST_F(CoopFreeSessionTest, coopwager_conserves_credits_and_coopnote_roundtrips_custom_datapad_save_record) {
+    auto baseItems = std::shared_ptr<resource::TwoDA>(
+        resource::TwoDA::Builder()
+            .columns({"equipableslots", "itemclass", "itemtype", "storepanelsort", "weapontype", "stacking"})
+            .row({"0", "i_datapad", "24", "85", "0", "1"})
+            .build());
+    EXPECT_CALL(_engine.resourceModule().twoDas(), get("baseitems"))
+        .Times(AnyNumber())
+        .WillRepeatedly(Return(baseItems));
+    auto datapadUti = resource::Gff::Builder()
+                          .type(0)
+                          .field(resource::Gff::Field::newInt("BaseItem", 0))
+                          .field(resource::Gff::Field::newResRef("TemplateResRef", "g_i_datapad001"))
+                          .field(resource::Gff::Field::newCExoLocString("LocalizedName", -1, "Datapad"))
+                          .build();
+    EXPECT_CALL(_engine.resourceModule().gffs(), get(_, _))
+        .Times(AnyNumber())
+        .WillRepeatedly(Invoke([datapadUti](const std::string &resRef, resource::ResType type) {
+            if (resRef == "g_i_datapad001" && type == resource::ResType::Uti) {
+                return datapadUti;
+            }
+            return std::shared_ptr<resource::Gff>();
+        }));
+
+    TestGameModule::initConsole(*_game);
+    join(sampleGuest()); // Alice starts with 40 credits
+    tick();
+    uint32_t gid = guestId();
+    ASSERT_NE(0u, gid);
+    _game->party().giveGold(100);
+    ASSERT_EQ(100, _game->party().gold());
+    ASSERT_EQ(40, _session->hostGuestPurse(gid)->second);
+
+    // Alice wins 50 credits: party pays 50 -> party 50, Alice 90 (total 140).
+    _console.lines.clear();
+    _console.execute("coopwager", {"Alice", "50"});
+    EXPECT_EQ(50, _game->party().gold());
+    EXPECT_EQ(90, _session->hostGuestPurse(gid)->second);
+
+    // Alice loses 200 credits: clamped at Alice's 90 -> party 140, Alice 0 (total 140).
+    _console.execute("coopwager", {"Alice", "-200"});
+    EXPECT_EQ(140, _game->party().gold());
+    EXPECT_EQ(0, _session->hostGuestPurse(gid)->second);
+
+    // coopnote places a custom-titled plot Datapad in Party Inventory, deduplicates by tag, and survives SaveWideSnapshotBuilder.
+    _game->party().initializeNewGameState();
+    _game->party().setActualPlayer(_player);
+    TestGameModule::configureModuleSnapshot(*_game, _area, _player, "end_m01aa", "end_m01aa");
+    const std::string b64 = "eyJ0aXRsZSI6IkRlc3NhJ3MgTm90ZSIsImJvZHkiOiJLZWVwIHlvdXIgaGVhZCBkb3duIG9uIFRhcmlzLiIsInRhZyI6InAyX25vdGVfZGVzc2FfMSJ9";
+    _console.lines.clear();
+    _console.execute("coopnote", {b64});
+    ASSERT_EQ(1u, _console.lines.size());
+    EXPECT_NE(std::string::npos, _console.lines[0].find("\"duplicate\":false"));
+
+    // Repeating the same tag is idempotent.
+    _console.execute("coopnote", {b64});
+    ASSERT_EQ(2u, _console.lines.size());
+    EXPECT_NE(std::string::npos, _console.lines[1].find("\"duplicate\":true"));
+
+    std::shared_ptr<Item> note;
+    for (const auto &it : _player->items()) {
+        if (it && it->tag() == "p2_note_dessa_1") {
+            note = it;
+            break;
+        }
+    }
+    ASSERT_NE(nullptr, note);
+    EXPECT_EQ("Dessa's Note", note->localizedName());
+    EXPECT_EQ("Keep your head down on Taris.", note->descIdentified());
+    EXPECT_TRUE(note->plotFlag());
+
+    auto shared = newSharedItemMenuBacking(*_game, _engine.services());
+    ASSERT_TRUE(_session->hostSetPackManageable("Alice", true));
+    auto datapadView = shared.inventory->readInventory(InventoryFilter::Datapad);
+    ASSERT_EQ(1u, datapadView.items.size());
+    EXPECT_EQ("Dessa's Note", datapadView.items[0].name);
+    EXPECT_FALSE(datapadView.items[0].transferable);
+
+    SaveWideSnapshotBuilder saveBuilder(*_game, {});
+    auto built = saveBuilder.build();
+    ASSERT_TRUE(built) << built.message;
+    auto invIt = built.snapshot->semanticResources.find({"inventory", resource::ResType::Res});
+    ASSERT_NE(built.snapshot->semanticResources.end(), invIt);
+    auto itemList = invIt->second->getList("ItemList");
+    ASSERT_EQ(1u, itemList.size());
+    auto reloaded = _game->newOwnedItem(*itemList[0], SerializedIdentityContext::detachedRecord("inventory.res"));
+    ASSERT_NE(nullptr, reloaded);
+    EXPECT_EQ("Dessa's Note", reloaded->localizedName());
+    EXPECT_EQ("Keep your head down on Taris.", reloaded->descIdentified());
+    EXPECT_EQ("p2_note_dessa_1", reloaded->tag());
 }
 
 

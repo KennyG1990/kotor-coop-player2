@@ -38,11 +38,13 @@
 #include "reone/game/effect/stunned.h"
 #include "reone/game/d20/attributes.h"
 #include "reone/game/d20/feat.h"
+#include "reone/game/gui/credits.h"
 #include "reone/game/gui/ingame/abilities.h"
 #include "reone/game/gui/ingame/character.h"
 #include "reone/game/gui/ingame/equip.h"
 #include "reone/game/gui/ingame/journal.h"
 #include "reone/game/gui/ingame/messages.h"
+#include "reone/game/journal.h"
 #include "reone/game/messagelog.h"
 #include "reone/game/keymap.h"
 #include "reone/gui/control/togglebutton.h"
@@ -674,6 +676,61 @@ TEST(K1HUDScreens, journal_sorts_and_splits_active_from_completed) {
         filter = JournalMenu::nextK1Sort(filter);
         EXPECT_EQ(expected, filter);
     }
+}
+
+TEST(K1HUDScreens, custom_companion_quest_upserts_and_completes_with_zero_plot_xp) {
+    NiceMock<MockGffs> gffs;
+    NiceMock<MockStrings> strings;
+    EXPECT_CALL(gffs, get(testing::_, testing::_)).WillRepeatedly(testing::Return(nullptr));
+
+    Journal journal(gffs, strings);
+    int notifications = 0;
+    Journal::EntryChange lastChange {};
+    journal.setOnQuestChanged([&](const Journal::EntryChange &ch) {
+        ++notifications;
+        lastChange = ch;
+    });
+
+    EXPECT_TRUE(journal.upsertCustomQuest(
+        "p2q_dessa_telos",
+        "Dessa: Ghosts of Telos",
+        10,
+        "Dessa wants to set foot on Tatooine to follow an old freighter manifest.",
+        false,
+        3,
+        true));
+    EXPECT_EQ(1, notifications);
+    EXPECT_EQ(-1, lastChange.plotIndex);
+    EXPECT_FLOAT_EQ(0.0f, lastChange.xpPercentage);
+    EXPECT_EQ("Dessa: Ghosts of Telos", journal.getQuestName("p2q_dessa_telos"));
+    EXPECT_EQ(10, journal.getEntryState("p2q_dessa_telos"));
+    EXPECT_FALSE(journal.isCompleted("p2q_dessa_telos"));
+    ASSERT_NE(nullptr, journal.customQuestMeta("P2Q_DESSA_TELOS"));
+
+    // Identical re-upsert does not spam HUD notifications.
+    EXPECT_FALSE(journal.upsertCustomQuest(
+        "p2q_dessa_telos",
+        "Dessa: Ghosts of Telos",
+        10,
+        "Dessa wants to set foot on Tatooine to follow an old freighter manifest.",
+        false,
+        3,
+        true));
+    EXPECT_EQ(1, notifications);
+
+    // Completing the quest advances state, flips isCompleted, and fires one notification.
+    EXPECT_TRUE(journal.upsertCustomQuest(
+        "p2q_dessa_telos",
+        "Dessa: Ghosts of Telos",
+        30,
+        "The manifest led nowhere good, but Dessa knows the truth of that night now.",
+        true,
+        3,
+        true));
+    EXPECT_EQ(2, notifications);
+    EXPECT_TRUE(journal.isCompleted("p2q_dessa_telos"));
+    EXPECT_EQ("The manifest led nowhere good, but Dessa knows the truth of that night now.",
+              journal.getEntryText("p2q_dessa_telos", 30));
 }
 
 TEST(K1HUDScreens, character_scripts_button_cycles_the_party_ai_style) {

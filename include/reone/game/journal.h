@@ -53,6 +53,13 @@ public:
         uint32_t time {0};
     };
 
+    struct CustomQuestMeta {
+        std::string title;
+        std::string text;
+        bool completed {false};
+        int planetId {-1};
+    };
+
     /**
      * A world-notes entry (AddJournalWorldEntry): free text under an index,
      * apart from the quests. It is kept for scripts and tests; the journal
@@ -88,6 +95,16 @@ public:
 
     /** Set quest state verbatim, e.g. when restoring from a savegame. */
     void restoreEntry(std::string plotId, int state, uint32_t date, uint32_t time);
+
+    /**
+     * Fork addition: register or update a dynamic companion quest in the live
+     * journal (without mutating retail global.jrl on disk). When `notify` is
+     * true and the quest is new or its state/text changed, fires the standard
+     * HUD "Journal Entry Added" notification with 0 cheat XP.
+     */
+    bool upsertCustomQuest(const std::string &plotId, const std::string &title, int state,
+                           const std::string &text, bool completed, int planetId = -1, bool notify = true);
+    const CustomQuestMeta *customQuestMeta(const std::string &plotId) const;
 
     /** @return state of the quest with the given plot ID, or 0 if not present */
     int getEntryState(const std::string &plotId) const;
@@ -132,6 +149,7 @@ private:
     std::vector<Quest> _quests;
     std::vector<WorldEntry> _worldEntries;
     std::map<std::string, int> _entryPictures;
+    std::map<std::string, CustomQuestMeta> _customQuests;
     std::function<void(const EntryChange &)> _onQuestChanged;
 
     void ensureLoaded();

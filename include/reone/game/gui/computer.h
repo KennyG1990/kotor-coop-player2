@@ -40,6 +40,8 @@ public:
     void update(float dt) override;
     void render() override;
 
+    bool isCameraView() const { return _presentation == Presentation::Camera; }
+
 protected:
     void onStart() override;
     void onFinish() override;

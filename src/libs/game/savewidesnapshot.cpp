@@ -401,12 +401,18 @@ std::shared_ptr<Gff> SaveWideSnapshotBuilder::buildPartyTable() const {
 
     std::vector<std::shared_ptr<Gff>> journal;
     for (const auto &quest : _game._journal.quests()) {
-        journal.push_back(Gff::Builder().type(0)
-                              .field(Gff::Field::newCExoString("JNL_PlotID", quest.plotId))
-                              .field(Gff::Field::newInt("JNL_State", quest.state))
-                              .field(Gff::Field::newDword("JNL_Date", quest.date))
-                              .field(Gff::Field::newDword("JNL_Time", quest.time))
-                              .build());
+        auto builder = Gff::Builder().type(0)
+                           .field(Gff::Field::newCExoString("JNL_PlotID", quest.plotId))
+                           .field(Gff::Field::newInt("JNL_State", quest.state))
+                           .field(Gff::Field::newDword("JNL_Date", quest.date))
+                           .field(Gff::Field::newDword("JNL_Time", quest.time));
+        if (const auto *custom = _game._journal.customQuestMeta(quest.plotId)) {
+            builder.field(Gff::Field::newCExoString("P2_Title", custom->title))
+                   .field(Gff::Field::newCExoString("P2_Text", custom->text))
+                   .field(Gff::Field::newByte("P2_Done", custom->completed ? 1 : 0))
+                   .field(Gff::Field::newInt("P2_Planet", custom->planetId));
+        }
+        journal.push_back(builder.build());
     }
     put(*result, Gff::Field::newList("JNL_Entries", std::move(journal)));
 

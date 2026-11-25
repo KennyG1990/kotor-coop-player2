@@ -2393,6 +2393,7 @@ void Game::resetGame() {
 
     _party.reset();
     _journal.reset();
+    _epilogueLines.clear();
     _messageLog.reset();
     _floatingText.reset();
     _cheatUsed = false;
@@ -3130,6 +3131,13 @@ void Game::deserializeJournal(const resource::Gff &ptGff) {
         int state = jnlEntry->getInt("JNL_State");
         uint32_t date = jnlEntry->getUint("JNL_Date");
         uint32_t time = jnlEntry->getUint("JNL_Time");
+        std::string p2Title(jnlEntry->getString("P2_Title"));
+        if (!p2Title.empty()) {
+            std::string p2Text(jnlEntry->getString("P2_Text"));
+            bool p2Done = jnlEntry->getInt("P2_Done", 0) != 0;
+            int p2Planet = jnlEntry->getInt("P2_Planet", -1);
+            _journal.upsertCustomQuest(plotId, p2Title, state, p2Text, p2Done, p2Planet, false);
+        }
         _journal.restoreEntry(std::move(plotId), state, date, time);
     }
 }

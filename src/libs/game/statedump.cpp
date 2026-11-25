@@ -829,6 +829,9 @@ void Game::consoleCompanionState(const ConsoleArgs &args) {
     // The names the game shows the player for where the party is.
     root["moduleName"] = _module ? json::value(_module->localizedName()) : json::value(nullptr);
     root["areaName"] = area ? json::value(area->localizedName()) : json::value(nullptr);
+    root["computerCamera"] = (_screen == Screen::Conversation && _computer &&
+                              _conversation == static_cast<Conversation *>(_computer.get()) &&
+                              _computer->isCameraView());
     // The player's character as the game's dialog log names it, and where the game's
     // own measure puts them between dark (0) and light (100).
     if (auto player = _party.player()) {

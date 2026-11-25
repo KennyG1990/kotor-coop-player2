@@ -19,6 +19,7 @@
 
 #include "../../gui.h"
 #include "../../types.h"
+#include "itemview.h"
 
 namespace reone {
 
@@ -32,7 +33,9 @@ class ListBox;
 
 namespace game {
 
+class Creature;
 class IFeats;
+class InGameMenu;
 class ISpells;
 class CreatureAttributes;
 
@@ -65,7 +68,17 @@ public:
     void selectTab(Tab tab);
 
     AbilitiesMenu(Game &game, ServicesView &services) :
-        GameGUI(game, services) {
+        AbilitiesMenu(game, nullptr, services, nullptr) {
+    }
+
+    AbilitiesMenu(
+        Game &game,
+        InGameMenu *inGameMenu,
+        ServicesView &services,
+        std::shared_ptr<IEquipmentMenuBacking> itemBacking = nullptr) :
+        GameGUI(game, services),
+        _inGameMenu(inGameMenu),
+        _itemBacking(std::move(itemBacking)) {
         _resRef = guiResRef("abilities");
     }
 
@@ -145,7 +158,12 @@ private:
 
     Tab _tab {Tab::Skills};
     std::vector<Entry> _entries;
+    InGameMenu *_inGameMenu {nullptr};
+    std::shared_ptr<IEquipmentMenuBacking> _itemBacking;
+    MenuSubjectView _subjectView;
+    std::string _defaultAbilitiesTitle;
 
+    std::shared_ptr<Creature> subjectCreature() const;
     void loadSkills();
     void refreshPortraits();
     void refreshList();

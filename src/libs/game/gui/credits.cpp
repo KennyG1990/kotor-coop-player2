@@ -76,6 +76,13 @@ void CreditsGUI::start(bool transparentBackground) {
     for (int i = 0; i < blank; ++i) {
         _list->addTextLinesAsItems(" ");
     }
+    if (!_extraLines.empty()) {
+        for (const auto &line : _extraLines) {
+            _list->addTextLinesAsItems(line.empty() ? " " : line);
+        }
+        _list->addTextLinesAsItems(" ");
+        _list->addTextLinesAsItems(" ");
+    }
     for (int row = 0; row < credits->getRowCount(); ++row) {
         int strRef = credits->getInt(row, "name", -1);
         if (strRef < 0) {

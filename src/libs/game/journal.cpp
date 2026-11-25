@@ -68,6 +68,7 @@ int Journal::entryPicture(const std::string &plotId) const {
 void Journal::reset() {
     _worldEntries.clear();
     _entryPictures.clear();
+    _customQuests.clear();
     _quests.clear();
     _jrl.categories.clear();
     _loaded = false;
@@ -180,6 +181,86 @@ void Journal::restoreEntry(std::string plotId, int state, uint32_t date, uint32_
         return;
     }
     _quests.push_back({std::move(plotId), state, date, time});
+}
+
+bool Journal::upsertCustomQuest(const std::string &plotId, const std::string &title, int state,
+                                const std::string &text, bool completed, int planetId, bool notify) {
+    if (plotId.empty() || title.empty() || state <= 0) {
+        return false;
+    }
+    ensureLoaded();
+    std::string key = boost::to_lower_copy(plotId);
+    bool metaChanged = false;
+    auto prevIt = _customQuests.find(key);
+    if (prevIt == _customQuests.end() ||
+        prevIt->second.title != title ||
+        prevIt->second.text != text ||
+        prevIt->second.completed != completed ||
+        prevIt->second.planetId != planetId) {
+        _customQuests[key] = CustomQuestMeta {title, text, completed, planetId};
+        metaChanged = true;
+    }
+
+    JRL::Category *cat = nullptr;
+    for (auto &c : _jrl.categories) {
+        if (boost::iequals(c.tag, plotId)) {
+            cat = &c;
+            break;
+        }
+    }
+    if (!cat) {
+        JRL::Category created;
+        created.tag = plotId;
+        created.name = {-1, title};
+        created.priority = 1;
+        created.planetId = planetId;
+        created.plotIndex = -1;
+        _jrl.categories.push_back(std::move(created));
+        cat = &_jrl.categories.back();
+    } else {
+        cat->name = {-1, title};
+        cat->planetId = planetId;
+    }
+
+    JRL::Entry *ent = nullptr;
+    for (auto &e : cat->entries) {
+        if (e.id == static_cast<uint32_t>(state)) {
+            ent = &e;
+            break;
+        }
+    }
+    if (!ent) {
+        JRL::Entry createdEnt;
+        createdEnt.id = static_cast<uint32_t>(state);
+        createdEnt.end = completed;
+        createdEnt.text = {-1, text};
+        createdEnt.xpPercentage = 0.0f;
+        cat->entries.push_back(std::move(createdEnt));
+        ent = &cat->entries.back();
+    } else {
+        ent->end = completed;
+        ent->text = {-1, text};
+    }
+
+    Quest *quest = findQuest(plotId);
+    bool stateChanged = false;
+    if (!quest) {
+        _quests.push_back({plotId, state, 0, 0});
+        stateChanged = true;
+    } else if (quest->state != state) {
+        quest->state = state;
+        stateChanged = true;
+    }
+
+    if (notify && (stateChanged || metaChanged)) {
+        notifyQuestChanged(cat, ent);
+    }
+    return stateChanged || metaChanged;
+}
+
+const Journal::CustomQuestMeta *Journal::customQuestMeta(const std::string &plotId) const {
+    auto it = _customQuests.find(boost::to_lower_copy(plotId));
+    return it != _customQuests.end() ? &it->second : nullptr;
 }
 
 int Journal::getEntryState(const std::string &plotId) const {

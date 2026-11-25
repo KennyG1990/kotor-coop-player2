@@ -1067,6 +1067,250 @@ void Game::initCoopConsole() {
         res["duplicate"] = false;
         _console.printLine(json::serialize(res));
     });
+    _console.registerCommand("coopjournal", "co-op Free Mode host: add/update or query custom companion quests in the native Journal: coopjournal <base64 JSON>", [this](const ConsoleArgs &args) {
+        namespace json = boost::json;
+        if (args.size() != 2) {
+            throw std::runtime_error("Usage: coopjournal <base64 JSON>");
+        }
+        if (!_coop || !_coop->isHost() || !_coop->freeMode()) {
+            throw std::runtime_error("coopjournal: host, Free Mode only");
+        }
+        json::value parsed;
+        try {
+            parsed = json::parse(decodeBase64(std::string(*args[1])));
+        } catch (const std::exception &e) {
+            throw std::runtime_error(std::string("coopjournal invalid JSON: ") + e.what());
+        }
+        if (!parsed.is_object()) {
+            throw std::runtime_error("coopjournal expected a JSON object");
+        }
+        const auto &obj = parsed.as_object();
+        if (auto qIt = obj.find("query"); qIt != obj.end() && qIt->value().is_bool() && qIt->value().as_bool()) {
+            json::array questsOut;
+            for (const auto &q : _journal.quests()) {
+                json::object row;
+                row["plot_id"] = q.plotId;
+                row["state"] = q.state;
+                row["title"] = _journal.getQuestName(q.plotId);
+                row["text"] = _journal.getEntryText(q.plotId, q.state);
+                row["completed"] = _journal.isCompleted(q.plotId);
+                row["custom"] = (_journal.customQuestMeta(q.plotId) != nullptr);
+                questsOut.push_back(std::move(row));
+            }
+            _console.printLine(json::serialize(json::object {{"quests", std::move(questsOut)}}));
+            return;
+        }
+        auto strField = [&](const char *key) -> std::string {
+            auto it = obj.find(key);
+            return (it != obj.end() && it->value().is_string()) ? std::string(it->value().as_string().c_str()) : std::string();
+        };
+        auto intField = [&](const char *key, int defVal) -> int {
+            auto it = obj.find(key);
+            return (it != obj.end() && it->value().is_int64()) ? static_cast<int>(it->value().as_int64()) : defVal;
+        };
+        auto boolField = [&](const char *key, bool defVal) -> bool {
+            auto it = obj.find(key);
+            return (it != obj.end() && it->value().is_bool()) ? it->value().as_bool() : defVal;
+        };
+        std::string rawPlot = boost::trim_copy(strField("plot_id"));
+        std::string title = boost::trim_copy(strField("title"));
+        std::string text = boost::trim_copy(strField("text"));
+        int state = std::max(1, intField("state", 10));
+        int planetId = intField("planet_id", -1);
+        bool completed = boolField("completed", false);
+        bool notify = boolField("notify", true);
+        std::string plotId;
+        for (char c : rawPlot) {
+            if (std::isalnum(static_cast<unsigned char>(c)) || c == '_') {
+                plotId.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+            }
+            if (plotId.size() >= 32) break;
+        }
+        if (plotId.rfind("p2q_", 0) != 0) {
+            plotId = "p2q_" + (plotId.empty() ? "quest" : plotId.substr(0, 27));
+        }
+        if (title.empty() || text.empty()) {
+            throw std::runtime_error("coopjournal requires non-empty title and text");
+        }
+        if (title.size() > 100) title.resize(100);
+        if (text.size() > 3600) text.resize(3600);
+        bool changed = _journal.upsertCustomQuest(plotId, title, state, text, completed, planetId, notify);
+        if (_inGame && _screen == Screen::InGameMenu && _inGame->activeTab() == InGameMenuTab::Journal) {
+            _inGame->openJournal();
+        }
+        _console.printLine(json::serialize(json::object {
+            {"plot_id", plotId},
+            {"state", state},
+            {"completed", completed},
+            {"changed", changed},
+        }));
+    });
+    _console.registerCommand("coopepilogue", "co-op Free Mode host: stage or read personalized companion epilogue lines for End Credits: coopepilogue <base64 JSON>", [this](const ConsoleArgs &args) {
+        namespace json = boost::json;
+        if (args.size() != 2) {
+            throw std::runtime_error("Usage: coopepilogue <base64 JSON>");
+        }
+        if (!_coop || !_coop->isHost() || !_coop->freeMode()) {
+            throw std::runtime_error("coopepilogue: host, Free Mode only");
+        }
+        json::value parsed = json::parse(decodeBase64(std::string(*args[1])));
+        if (!parsed.is_object()) {
+            throw std::runtime_error("coopepilogue expected a JSON object");
+        }
+        const auto &obj = parsed.as_object();
+        if (auto it = obj.find("lines"); it != obj.end() && it->value().is_array()) {
+            std::vector<std::string> staged;
+            for (const auto &v : it->value().as_array()) {
+                if (v.is_string() && staged.size() < 80) {
+                    std::string s(v.as_string().c_str());
+                    if (s.size() > 120) s.resize(120);
+                    staged.push_back(std::move(s));
+                }
+            }
+            _epilogueLines = std::move(staged);
+            if (_credits) {
+                _credits->setExtraLines(_epilogueLines);
+            }
+        }
+        json::array current;
+        for (const auto &l : _epilogueLines) {
+            current.push_back(json::value(l));
+        }
+        _console.printLine(json::serialize(json::object {
+            {"count", _epilogueLines.size()},
+            {"running", isCreditSequenceInProgress()},
+            {"lines", std::move(current)},
+        }));
+    });
+    _console.registerCommand("cooplegend", "co-op Free Mode host: spawn a returning past-campaign companion NPC in the current safe hub: cooplegend <base64 JSON>", [this](const ConsoleArgs &args) {
+        namespace json = boost::json;
+        if (args.size() != 2) {
+            throw std::runtime_error("Usage: cooplegend <base64 JSON>");
+        }
+        if (!_coop || !_coop->isHost() || !_coop->freeMode()) {
+            throw std::runtime_error("cooplegend: host, Free Mode only");
+        }
+        auto area = (_module && _module->area()) ? _module->area() : nullptr;
+        auto leader = _party.getLeader();
+        if (!area || !leader || !leader->isRuntimeLive()) {
+            throw std::runtime_error("cooplegend: no active area or party leader");
+        }
+        json::value parsed = json::parse(decodeBase64(std::string(*args[1])));
+        if (!parsed.is_object()) {
+            throw std::runtime_error("cooplegend expected a JSON object");
+        }
+        const auto &obj = parsed.as_object();
+        auto strField = [&](const char *key) -> std::string {
+            auto it = obj.find(key);
+            return (it != obj.end() && it->value().is_string()) ? std::string(it->value().as_string().c_str()) : std::string();
+        };
+        auto intField = [&](const char *key, int defVal) -> int {
+            auto it = obj.find(key);
+            return (it != obj.end() && it->value().is_int64()) ? static_cast<int>(it->value().as_int64()) : defVal;
+        };
+        std::string name = boost::trim_copy(strField("name"));
+        if (name.empty()) {
+            throw std::runtime_error("cooplegend requires a non-empty name");
+        }
+        if (name.size() > 48) name.resize(48);
+        std::string rawTag = boost::trim_copy(strField("tag"));
+        std::string tag;
+        for (char c : rawTag) {
+            if (std::isalnum(static_cast<unsigned char>(c)) || c == '_') {
+                tag.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+            }
+            if (tag.size() >= 28) break;
+        }
+        if (tag.rfind("p2legend_", 0) != 0) {
+            tag = "p2legend_" + (tag.empty() ? "vet" : tag.substr(0, 18));
+        }
+        if (auto existing = area->getObjectByTag(tag)) {
+            if (auto liveCr = std::dynamic_pointer_cast<Creature>(existing); liveCr && liveCr->isRuntimeLive() && !liveCr->isDead()) {
+                _coop->hostRegisterLegend(liveCr->id(), tag, name, _module->name());
+                _console.printLine(json::serialize(json::object {
+                    {"id", liveCr->id()},
+                    {"tag", tag},
+                    {"name", liveCr->name()},
+                    {"duplicate", true},
+                }));
+                return;
+            }
+        }
+        int slot = std::clamp(intField("class_slot", 1), 0, 5);
+        int goodEvil = std::clamp(intField("alignment", 50), 0, 100);
+        if (!_charGen) {
+            _charGen = tryLoadGUI<CharacterGeneration>();
+        }
+        auto quick = _charGen ? _charGen->quickCharacterForAutomation(slot) : nullptr;
+        auto creature = newCreature();
+        creature->setTag(tag);
+        creature->setName(name);
+        creature->setGender(quick ? quick->gender : ((slot >= 3) ? Gender::Female : Gender::Male));
+        creature->setAppearance(intField("appearance", quick ? quick->appearance : 6));
+        try {
+            creature->loadAppearance();
+        } catch (const std::exception &) {
+        }
+        if (quick) {
+            creature->attributes() = quick->attributes;
+        }
+        creature->setFaction(Faction::Friendly1);
+        creature->setGoodEvil(goodEvil);
+        creature->setPuppet(true);
+        creature->setImmortal(true);
+        creature->setMaxHitPoints(120);
+        creature->setCurrentHitPoints(120);
+
+        std::string armorTpl = boost::trim_copy(strField("armor_tpl"));
+        if (!armorTpl.empty()) {
+            if (auto arm = newItemFromBlueprint(armorTpl)) {
+                creature->equip(InventorySlots::body, arm);
+            }
+        }
+        std::string weaponTpl = boost::trim_copy(strField("weapon_tpl"));
+        if (!weaponTpl.empty()) {
+            if (auto weap = newItemFromBlueprint(weaponTpl)) {
+                creature->equip(InventorySlots::rightWeapon, weap);
+            }
+        }
+
+        float facing = leader->getFacing();
+        const std::array<glm::vec2, 6> candidates {{
+            {std::cos(facing) * 3.0f - std::sin(facing) * 1.4f, std::sin(facing) * 3.0f + std::cos(facing) * 1.4f},
+            {std::cos(facing) * 3.0f + std::sin(facing) * 1.4f, std::sin(facing) * 3.0f - std::cos(facing) * 1.4f},
+            {2.8f, 1.5f},
+            {-2.8f, 1.5f},
+            {2.2f, -2.2f},
+            {1.5f, 0.8f},
+        }};
+        bool placed = false;
+        for (const auto &off : candidates) {
+            creature->setPosition(leader->position() + glm::vec3(off.x, off.y, 0.0f));
+            if (area->landObject(*creature)) {
+                placed = true;
+                break;
+            }
+        }
+        if (!placed) {
+            creature->setPosition(leader->position() + glm::vec3(1.2f, 0.8f, 0.0f));
+            area->landObject(*creature);
+        }
+        glm::vec2 toLeader = glm::vec2(leader->position()) - glm::vec2(creature->position());
+        if (glm::length(toLeader) > 0.05f) {
+            creature->setFacing(std::atan2(toLeader.y, toLeader.x) - glm::half_pi<float>());
+        }
+        area->add(creature);
+        creature->updateModelAnimation();
+        _coop->hostRegisterLegend(creature->id(), tag, name, _module->name());
+
+        _console.printLine(json::serialize(json::object {
+            {"id", creature->id()},
+            {"tag", tag},
+            {"name", name},
+            {"duplicate", false},
+            {"position", json::array {creature->position().x, creature->position().y, creature->position().z}},
+        }));
+    });
     _console.registerCommand("cooplevelup", "co-op client: level up the companion through the level-up screens (Recommended): cooplevelup", [=](const ConsoleArgs &) {
         auto &session = clientSession();
         auto member = std::dynamic_pointer_cast<Creature>(session.localObjectForHost(session.controlledHostId()));

@@ -3602,6 +3602,29 @@ json::object CoopSession::statusJson() const {
         }
         root["partyGold"] = _game.party().gold();
         root["pcSpeaker"] = _pcSpeaker;
+        if (!_legends.empty()) {
+            std::string curMod = _game.module() ? _game.module()->name() : std::string();
+            json::array legs;
+            for (const auto &leg : _legends) {
+                if (!curMod.empty() && leg.module != curMod) {
+                    continue;
+                }
+                auto cr = _game.getObjectById<Creature>(leg.creatureId);
+                if (!cr || !cr->isRuntimeLive() || cr->isDead()) {
+                    continue;
+                }
+                legs.push_back(json::object {
+                    {"id", leg.creatureId},
+                    {"tag", leg.tag},
+                    {"name", leg.name},
+                    {"module", leg.module},
+                    {"talkRequests", leg.talkRequests},
+                });
+            }
+            if (!legs.empty()) {
+                root["legends"] = std::move(legs);
+            }
+        }
         if (freeMode()) {
             json::array list;
             for (const auto &entry : guestList()) {

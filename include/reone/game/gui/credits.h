@@ -17,6 +17,9 @@
 
 #pragma once
 
+#include <string>
+#include <vector>
+
 #include "../gui.h"
 
 #include "reone/gui/control/listbox.h"
@@ -52,8 +55,12 @@ public:
     int lineCount() const { return _lineCount; }
     int offset() const { return _offset; }
 
+    void setExtraLines(std::vector<std::string> lines) { _extraLines = std::move(lines); }
+    const std::vector<std::string> &extraLines() const { return _extraLines; }
+
 private:
     std::shared_ptr<gui::ListBox> _list;
+    std::vector<std::string> _extraLines;
     bool _running {false};
     bool _transparent {false};
     float _elapsed {0.0f};

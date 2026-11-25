@@ -1428,6 +1428,22 @@ bool CoopSession::hostSetTalkable(const std::string &who, bool on) {
     return false;
 }
 
+void CoopSession::hostRegisterLegend(uint32_t creatureId, std::string tag, std::string name, std::string module) {
+    if (!isHost() || creatureId == 0) {
+        return;
+    }
+    for (auto &leg : _legends) {
+        if (leg.creatureId == creatureId || (!tag.empty() && boost::iequals(leg.tag, tag) && leg.module == module)) {
+            leg.creatureId = creatureId;
+            leg.tag = std::move(tag);
+            leg.name = std::move(name);
+            leg.module = std::move(module);
+            return;
+        }
+    }
+    _legends.push_back(LegendNpc {creatureId, std::move(tag), std::move(name), std::move(module), 0});
+}
+
 bool CoopSession::hostTalkClick(const Creature &creature) {
     if (!isHost()) {
         return false;
@@ -1435,6 +1451,12 @@ bool CoopSession::hostTalkClick(const Creature &creature) {
     for (auto &[connection, client] : _clients) {
         if (client.talkable && client.guestId != 0 && client.guestId == creature.id()) {
             ++client.talkRequests;
+            return true;
+        }
+    }
+    for (auto &leg : _legends) {
+        if (leg.creatureId != 0 && leg.creatureId == creature.id()) {
+            ++leg.talkRequests;
             return true;
         }
     }

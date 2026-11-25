@@ -308,6 +308,7 @@ void Game::startCreditSequence(bool transparentBackground) {
     }
     stopMovement();
     setRelativeMouseMode(false);
+    _credits->setExtraLines(_epilogueLines);
     _credits->start(transparentBackground);
     if (_screen != Screen::Credits) {
         _creditsOriginScreen = _screen;

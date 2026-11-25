@@ -24,6 +24,7 @@
 #include "reone/game/d20/spells.h"
 #include "reone/game/di/services.h"
 #include "reone/game/game.h"
+#include "reone/game/gui/ingame.h"
 #include "reone/game/object/creature.h"
 #include "reone/game/party.h"
 #include "reone/gui/control/button.h"
@@ -78,6 +79,9 @@ void AbilitiesMenu::onGUILoaded() {
     _controls.LBL_NAME->setTextMessage("");
 
     _controls.LB_DESC->setProtoMatchContent(true);
+    if (_controls.LBL_ABILITIES) {
+        _defaultAbilitiesTitle = _controls.LBL_ABILITIES->text().text;
+    }
     if (isTSL()) {
         fillK2SectionStrip(_controls.LBL_BAR1, _controls.LBL_BAR2);
         _controls.LB_ABILITY->setTintBorderFill(true);
@@ -87,17 +91,41 @@ void AbilitiesMenu::onGUILoaded() {
         _controls.LBL_NAME->setTintBorderFill(true);
         useK2ShellTitle(_controls.LBL_ABILITIES);
         enableK2ButtonBodyFill(_controls.BTN_EXIT);
+        if (_inGameMenu) {
+            _controls.BTN_CHANGE1 = _inGameMenu->getBtnChange2();
+            _controls.BTN_CHANGE2 = _inGameMenu->getBtnChange3();
+        }
         if (auto protoItem = _controls.LB_ABILITY->protoItemOrNull()) {
             enableK2ButtonBodyFill(*protoItem);
             protoItem->setBorderFill("uibit_fill_2wt");
             protoItem->setHilightFill("uibit_fill_2wt");
             protoItem->setTintBorderFill(true);
         }
+    } else {
+        if (_controls.BTN_CHANGE1) {
+            _controls.BTN_CHANGE1->setSelectable(false);
+            _controls.BTN_CHANGE1->setOnClick([this]() {
+                if (_itemBacking && _itemBacking->selectPortrait(1)) {
+                    refreshControls();
+                }
+            });
+        }
+        if (_controls.BTN_CHANGE2) {
+            _controls.BTN_CHANGE2->setSelectable(false);
+            _controls.BTN_CHANGE2->setOnClick([this]() {
+                if (_itemBacking && _itemBacking->selectPortrait(2)) {
+                    refreshControls();
+                }
+            });
+        }
     }
     _controls.LB_ABILITY->setOnItemClick([this](const std::string &item) {
         onListItemClick(item);
     });
     _controls.BTN_EXIT->setOnClick([this]() {
+        if (_itemBacking) {
+            _itemBacking->resetInspectedSubject();
+        }
         _game.openInGame();
     });
 
@@ -126,11 +154,16 @@ void AbilitiesMenu::onListItemClick(const std::string &item) {
         if (maybeSkillInfo == _skills.end())
             return;
 
-        std::shared_ptr<Creature> partyLeader(_game.party().getLeader());
-
-        _controls.LBL_RANKVAL->setTextMessage(std::to_string(partyLeader->attributes().getSkillRank(skill)));
-        _controls.LBL_BONUSVAL->setTextMessage("0");
-        _controls.LBL_TOTALVAL->setTextMessage(std::to_string(partyLeader->attributes().getSkillRank(skill)));
+        std::shared_ptr<Creature> subject(subjectCreature());
+        if (!subject) {
+            return;
+        }
+        int rank = subject->attributes().getSkillRank(skill);
+        int total = subject->getSkillValue(skill);
+        int bonus = total - rank;
+        _controls.LBL_RANKVAL->setTextMessage(std::to_string(rank));
+        _controls.LBL_BONUSVAL->setTextMessage(bonus >= 0 ? "+" + std::to_string(bonus) : std::to_string(bonus));
+        _controls.LBL_TOTALVAL->setTextMessage(std::to_string(total));
         _controls.LBL_NAME->setTextMessage(maybeSkillInfo->second.name);
 
         _controls.LB_DESC->clearItems();
@@ -213,9 +246,9 @@ void AbilitiesMenu::refreshList() {
         }
         return;
     }
-    auto leader = _game.party().getLeader();
-    _entries = leader ? entriesFor(_tab, leader->attributes(), _services.game.spells, _services.game.feats)
-                      : std::vector<Entry>();
+    auto subject = subjectCreature();
+    _entries = subject ? entriesFor(_tab, subject->attributes(), _services.game.spells, _services.game.feats)
+                       : std::vector<Entry>();
     _controls.LB_ABILITY->clearItems();
     for (const auto &entry : _entries) {
         ListBox::Item item;
@@ -243,9 +276,34 @@ void AbilitiesMenu::loadSkills() {
 
 }
 
+std::shared_ptr<Creature> AbilitiesMenu::subjectCreature() const {
+    if (_itemBacking) {
+        uint32_t subjId = _itemBacking->activeSubjectId();
+        if (subjId != 0) {
+            if (auto subj = _game.getObjectById<Creature>(subjId); subj && subj->isRuntimeLive()) {
+                return subj;
+            }
+        }
+    }
+    return _game.party().getLeader();
+}
+
 void AbilitiesMenu::refreshControls() {
+    _subjectView = _itemBacking ? _itemBacking->readEquipment(-1).subject : MenuSubjectView {};
+    auto subject = subjectCreature();
+    if (_controls.LBL_ABILITIES) {
+        std::string baseTitle = _defaultAbilitiesTitle.empty() ? "Abilities" : _defaultAbilitiesTitle;
+        std::string display = !_subjectView.subjectName.empty()
+                                  ? _subjectView.subjectName
+                                  : (subject ? subject->name() : std::string());
+        _controls.LBL_ABILITIES->setTextMessage(
+            (_subjectView.isGuestSubject && !display.empty()) ? (display + " - " + baseTitle) : baseTitle);
+    }
+    if (_controls.LBL_PORTRAIT) {
+        _controls.LBL_PORTRAIT->setBorderFill(subject ? subject->portrait() : nullptr);
+    }
     refreshPortraits();
-    // The leader may have changed since the screen was built.
+    // The inspected subject may have changed since the screen was built.
     refreshList();
 }
 
@@ -253,8 +311,23 @@ void AbilitiesMenu::refreshPortraits() {
     if (isTSL())
         return;
 
+    if (_itemBacking && _subjectView.present) {
+        if (_controls.BTN_CHANGE1) {
+            bool ok = _subjectView.portraitSelectable[1] && _subjectView.portraits[1] != nullptr;
+            _controls.BTN_CHANGE1->setBorderFill(_subjectView.portraits[1]);
+            _controls.BTN_CHANGE1->setHilightFill(_subjectView.portraits[1]);
+            _controls.BTN_CHANGE1->setSelectable(ok);
+        }
+        if (_controls.BTN_CHANGE2) {
+            bool ok = _subjectView.portraitSelectable[2] && _subjectView.portraits[2] != nullptr;
+            _controls.BTN_CHANGE2->setBorderFill(_subjectView.portraits[2]);
+            _controls.BTN_CHANGE2->setHilightFill(_subjectView.portraits[2]);
+            _controls.BTN_CHANGE2->setSelectable(ok);
+        }
+        return;
+    }
+
     Party &party = _game.party();
-    std::shared_ptr<Creature> partyLeader(party.getLeader());
     std::shared_ptr<Creature> partyMember1(party.getMember(1));
     std::shared_ptr<Creature> partyMember2(party.getMember(2));
 

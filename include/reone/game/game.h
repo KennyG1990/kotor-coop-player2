@@ -1659,6 +1659,7 @@ private:
     std::optional<RuntimeObjectRef<Item>> _pendingUpgrade;
     bool _pendingLevelUp {false};
     Screen _creditsOriginScreen {Screen::None};
+    std::vector<std::string> _epilogueLines;
 
     struct QueuedMovie {
         std::string name;

@@ -496,8 +496,17 @@ public:
      * there is no such player.
      */
     bool hostSetTalkable(const std::string &who, bool on);
-    /** Host: the host clicked `creature`. True when it was a talkable guest, whose request to talk is then counted. */
+    /** Host: the host clicked `creature`. True when it was a talkable guest or registered cantina legend, whose request to talk is then counted. */
     bool hostTalkClick(const Creature &creature);
+    struct LegendNpc {
+        uint32_t creatureId {0};
+        std::string tag;
+        std::string name;
+        std::string module;
+        uint32_t talkRequests {0};
+    };
+    void hostRegisterLegend(uint32_t creatureId, std::string tag, std::string name, std::string module);
+    const std::vector<LegendNpc> &hostLegends() const { return _legends; }
     /** Host test seam: a guest's credits. */
     bool setGuestCredits(uint32_t clientId, int credits);
     /** Host, Free Mode: the player whose seated character is `guestId`, and that character's own credits. */
@@ -1284,6 +1293,7 @@ private:
     void clientShowPause();
     void clientCloseContainerScreen(bool silent);
     void showNotice(net::NoticeKind kind, const std::string &text);
+    std::vector<LegendNpc> _legends;
 };
 
 /**

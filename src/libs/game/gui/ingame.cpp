@@ -103,7 +103,7 @@ void InGameMenu::loadCharacter() {
 }
 
 void InGameMenu::loadAbilities() {
-    _abilities = std::make_shared<AbilitiesMenu>(_game, _services);
+    _abilities = std::make_shared<AbilitiesMenu>(_game, this, _services, _sharedItems.equipment);
     _abilities->init();
     _host->registerScreen(InGameMenuTab::Abilities, _abilities);
 }
